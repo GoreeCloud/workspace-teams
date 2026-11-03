@@ -63,3 +63,9 @@ This is not a device inventory. Device names, login history, alerts, MFA and dur
 The passphrase is read from a regular private file, not a CLI argument. Unix permission checks reject group/world-readable files; symlinked files are rejected. A minimum 16-byte passphrase is enforced (long random credentials are recommended). Keep the key separate from archives; losing it makes the archive unrecoverable.
 
 **Security limitations:** both backup creation and restore temporarily stage unencrypted database/attachments in restricted OS temp directories, and ordinary deletion is not secure erasure. No host-compromise defense, scheduled/offsite backup, automatic key management, recovery assurance or full independent cryptographic audit is claimed. The older `backup` command remains unencrypted.
+
+## Owner JSON export (alpha)
+
+The owner-only GET /api/spaces/{id}/export route returns one space's message, task, note, member and file metadata. Authentication, ownership, space isolation, no-store headers, attachment disposition, 10,000-message and 8 MiB output limits, and per-process export throttling are enforced; no stored password/session/invitation secrets or file bytes are exported.
+
+**Privacy:** The JSON download is unencrypted and contains personal information. Store it in an encrypted private location. This is not an encrypted backup, file export, import feature, or complete retention/privacy compliance tool. Full browser acceptance and security evaluation remain pending.

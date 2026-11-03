@@ -288,6 +288,30 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         const data=await body(req);if(!validText(data.name,80)||!['personal','family','community','team'].includes(data.kind))return error(res,400,'Invalid space');
         const id=createSpace(user.id,data.name.trim(),data.kind);return send(res,201,{id});
       }
+      // Owner-only space JSON export; never includes raw files or authentication secrets.
+      const exportRoute=path.match(/^\/api\/spaces\/([0-9a-f-]{36})\/export$/);
+      if(exportRoute && method==='GET') {
+        const spaceId=exportRoute[1],role=membership(spaceId,user.id);
+        if(!role)return error(res,404,'Space not found');
+        if(role!=='owner')return error(res,403,'Owner access required');
+        if(!limit(ip+':'+user.id,'space-export',6,60_000))return error(res,429,'Too many export requests');
+        const count=get('SELECT COUNT(*) AS total FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.space_id=?',spaceId).total;
+        if(count>10000)return error(res,413,'Space export exceeds message limit');
+        const data={
+          schema:'goreecloud.workspace-teams.space.v1',exportedAt:now(),attachmentBytesIncluded:false,
+          space:get('SELECT id,name,kind,created_at AS createdAt FROM spaces WHERE id=?',spaceId),
+          members:all('SELECT u.id,u.username,u.display_name AS displayName,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.space_id=? ORDER BY u.username',spaceId),
+          channels:all('SELECT id,name,created_at AS createdAt FROM channels WHERE space_id=? ORDER BY created_at,id',spaceId),
+          messages:all('SELECT m.id,m.channel_id AS channelId,m.author_id AS authorId,m.body,m.created_at AS createdAt,m.updated_at AS updatedAt,m.parent_id AS parentId FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.space_id=? ORDER BY m.created_at,m.id',spaceId),
+          tasks:all('SELECT id,author_id AS authorId,title,done,created_at AS createdAt FROM tasks WHERE space_id=? ORDER BY created_at,id',spaceId),
+          notes:all('SELECT id,author_id AS authorId,title,body,updated_at AS updatedAt FROM notes WHERE space_id=? ORDER BY updated_at,id',spaceId),
+          files:all('SELECT id,uploader_id AS uploaderId,filename AS name,size,sha256,created_at AS uploadedAt FROM files WHERE space_id=? ORDER BY created_at,id',spaceId)
+        };
+        const json=JSON.stringify(data), bytes=Buffer.byteLength(json);
+        if(bytes>8*1024*1024)return error(res,413,'Space export exceeds 8 MiB JSON limit');
+        res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="workspace-space-'+spaceId+'.json"','Content-Length':bytes,'Cache-Control':'no-store'});
+        return res.end(json);
+      }
       const filesRoute=path.match(/^\/api\/spaces\/([0-9a-f-]{36})\/files$/);
       if(filesRoute && ['GET','POST'].includes(method)) {
         const spaceId=filesRoute[1];

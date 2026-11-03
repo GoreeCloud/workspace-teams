@@ -32,7 +32,7 @@ This document organizes all **28 capability areas** from the founder's supplied 
 | 22 | Bots, applications, integrations | Planned | — |
 | 23 | Developer APIs and extensibility | Partial | Versionless internal JSON API; no supported third-party SDK |
 | 24 | Security, identity, privacy | Partial | scrypt, sessions, same-origin writes, membership enforcement, CSP |
-| 25 | Data governance and administration | Partial | Owner-permitted channel creation, invitations, membership removal; no governance suite |
+| 25 | Data governance and administration | Partial | Owner-permitted channel creation, invitations, membership removal and limited JSON export; no governance suite |
 | 26 | GoreeCloud UI and accessibility | Partial | Semantic tokens, responsive UI, keyboard/focus/reduced-motion basics |
 | 27 | Cross-platform and offline | Partial | Responsive web; browser offline and native clients pending |
 | 28 | Backup, recovery, migration, reliability | Partial | Consistency-checked on-demand SQLite snapshot and verified attachment sidecar; encryption/restore automation pending |
