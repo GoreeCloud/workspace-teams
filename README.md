@@ -44,7 +44,13 @@ The example host port is **localhost only**. See [deployment guidance](docs/DEPL
 npm run backup -- --db ./data/workspace.sqlite --output ./backups/workspace-2026-11-03.sqlite
 ```
 
-The backup tool uses the SQLite backup API, verifies integrity and refuses to replace an existing destination. It is **not encrypted**: store backup files in a protected location; perform restore drills separately. See [deployment and recovery](docs/DEPLOYMENT.md).
+The backup tool verifies SQLite and attachment integrity and refuses to overwrite previous snapshots. Backups are **not encrypted**; store them in a protected location. To restore into a **brand-new** isolated directory:
+
+```sh
+npm run restore -- --from ./backups/workspace-2026-11-03.sqlite --dest ./restored-test-instance
+```
+
+This checks the database and every attachment before creating `restored-test-instance/workspace.sqlite` and its `.files` directory. It never overwrites an existing destination. Use offline snapshots and a disposable test instance; host-level recovery acceptance is still pending. See [deployment guidance](docs/DEPLOYMENT.md).
 
 ## Documentation
 
