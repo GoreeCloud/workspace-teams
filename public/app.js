@@ -124,8 +124,10 @@ $('#new-channel').addEventListener('click',()=>openModal({title:'Create a channe
 function openNote(note){openModal({eyebrow:note?'EDIT NOTE':'NEW NOTE',title:note?'Edit your note':'Capture a thought',fields:[{name:'title',label:'Title',maxLength:120,placeholder:'A name for this idea',value:note?.title||''},{name:'body',label:'Note',required:false,multiline:true,maxLength:20000,placeholder:'Start writing…',value:note?.body||''}],submit:note?'Save changes':'Create note',action:async data=>{await api(note?`/notes/${note.id}`:`/spaces/${state.space.id}/notes`,{method:note?'PATCH':'POST',data});await loadNotes();}});}
 $('#new-note').addEventListener('click',()=>openNote(null));
 $('#invite-btn').addEventListener('click',async()=>{try{const {invite}=await api(`/spaces/${state.space.id}/invites`,{method:'POST',data:{}});const url=new URL(location.origin);url.searchParams.set('invite',invite);openModal({eyebrow:'INVITATION',title:'Bring someone in',description:'This one-time link expires after 24 hours. Share it privately with someone you trust.',fields:[{name:'url',label:'Private invitation link',value:url.toString(),required:false}],submit:'Copy link',action:async data=>{await navigator.clipboard.writeText(data.url);showToast('Invitation link copied.');}});}catch(err){showToast(err.message);}});
-$('#logout').addEventListener('click',async()=>{try{await api('/logout',{method:'POST'});if(state.events)state.events.close();state.user=null;await initialize();}catch(err){showToast(err.message);}});
 const accountDialog=$('#account-dialog');
+async function signOut(){try{await api('/logout',{method:'POST'});if(state.events)state.events.close();state.events=null;state.user=null;if(accountDialog.open)accountDialog.close();await initialize();}catch(err){showToast(err.message);}}
+$('#logout').addEventListener('click',signOut);
+$('#account-signout').addEventListener('click',signOut);
 async function refreshAccountSecurity(){const result=await api('/account/security');$('#account-session-count').textContent=result.activeSessions+' active session'+(result.activeSessions===1?'':'s')+' on this account.';}
 $('#profile-menu').addEventListener('click',async()=>{accountDialog.showModal();try{await refreshAccountSecurity();}catch(e){showToast(e.message);}});
 $('#account-close').addEventListener('click',()=>accountDialog.close());
