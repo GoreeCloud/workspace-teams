@@ -11,7 +11,7 @@ GoreeCloud Workspace Teams is a personal-first collaboration platform designed f
 - **Channels and real-time chat:** channel history, Server-Sent Events, message editing/deleting by authors or space owners, basic reply references, input validation and live changes.
 - **Find your work:** permission-filtered, case-insensitive substring search of messages, tasks and notes in spaces you can access.
 - **Private files:** upload, list, download and delete small space-owned files; downloads force attachment disposition and every request enforces space membership.
-- **Space portability:** owners can download a scoped JSON export of conversations, notes, tasks, channels, members and attachment metadata (not file bytes). See [space export](docs/EXPORT.md).
+- **Space portability:** owners can download space-scoped JSON with conversations, tasks, notes, members and file metadata, or explicitly include up to 8 MiB of verified attachment contents. Both exports are unencrypted. The offline verifier checks downloaded files but does not import them. See [space export](docs/EXPORT.md).
 - **Tasks and shared notes:** create, update, delete and read personal or shared items within authorized spaces.
 - **Web client:** responsive GoreeCloud UI-informed alpha layouts for messaging, tasks, notes, search, members and files; safe text-only user content and keyboard focus.
 - **Backups and recovery:** unencrypted integrity-checked SQLite-plus-attachment snapshots, optional encrypted GCWSENC1 archives, isolated restore, and a one-shot scheduled-backup runner with optional systemd examples. No production schedule or offsite backup is active.
@@ -82,6 +82,4 @@ A private passphrase file (`chmod 600` on Unix) is required. The self-contained 
 
 Use the account avatar to inspect the active session count, sign out other sessions, or change your password. Password rotation checks the old password, stores a new salted scrypt verifier, revokes every prior cookie, and issues a fresh cookie for this browser. This is basic account hygiene, not multi-factor authentication, device auditing, or production security assurance.
 
-- **Portable space exports:** owners can optionally download a bounded attachment-inclusive JSON space export; this is unencrypted and not a substitute for full-instance encrypted recovery.
-
-- **Read-only export verification:** `npm run export:verify -- --file PRIVATE-SPACE-EXPORT.json` checks metadata and optional attached bytes without importing or modifying data.
+A portable JSON export and its read-only verifier do **not** replace encrypted full-instance backups or provide an import workflow.
