@@ -15,7 +15,7 @@ function addSpaceButton(space){const button=el('button','rail-item'+(state.space
 async function loadSpaces(){const result=await api('/spaces');state.spaces=result.spaces;const wanted=state.spaces.find(s=>s.id===state.space?.id)||state.spaces[0];if(!wanted)return;await selectSpace(wanted);}
 async function selectSpace(space){state.space=space;state.channel=null;state.replyTo=null;$('#reply-banner').hidden=true;if(state.events)state.events.close();state.events=null;clear($('#space-rail-list'));state.spaces.forEach(addSpaceButton);$('#space-title').textContent=space.name;$('#context-space').textContent=space.name;$('#context-kind').textContent=space.kind+' space';$('#space-subtitle').textContent=space.kind==='personal'?'A little corner of your cloud.':'Your shared corner of the cloud.';$('#new-channel').hidden=space.role!=='owner';$('#invite-btn').hidden=space.role!=='owner';const {channels}=await api(`/spaces/${space.id}/channels`);state.channels=channels;clear($('#channel-list'));channels.forEach(channel=>{const button=el('button','nav-link','# '+channel.name);button.type='button';button.dataset.channel=channel.id;button.addEventListener('click',()=>selectChannel(channel));$('#channel-list').append(button);});if(channels[0])await selectChannel(channels[0]);else await selectTool('tasks');}
 function activeNav(){document.querySelectorAll('.nav-link').forEach(node=>{const active=state.tool==='messages'?node.dataset.channel===state.channel?.id:node.dataset.tool===state.tool;node.classList.toggle('active',active);if(active)node.setAttribute('aria-current','page');else node.removeAttribute('aria-current');});}
-function view(tool,title,eyebrow){state.tool=tool;$('#messages-view').hidden=tool!=='messages';$('#tasks-view').hidden=tool!=='tasks';$('#notes-view').hidden=tool!=='notes';$('#search-view').hidden=tool!=='search';$('#members-view').hidden=tool!=='members';$('#files-view').hidden=tool!=='files';$('#view-title').textContent=title;$('#view-eyebrow').textContent=eyebrow;activeNav();}
+function view(tool,title,eyebrow){state.tool=tool;$('#messages-view').hidden=tool!=='messages';$('#tasks-view').hidden=tool!=='tasks';$('#notes-view').hidden=tool!=='notes';$('#search-view').hidden=tool!=='search';$('#members-view').hidden=tool!=='members';$('#view-title').textContent=title;$('#view-eyebrow').textContent=eyebrow;activeNav();}
 async function selectChannel(channel){state.channel=channel;state.replyTo=null;$('#reply-banner').hidden=true;if(state.events)state.events.close();state.events=null;view('messages','# '+channel.name,'CONVERSATIONS');$('#message-input').placeholder='Message #'+channel.name;await loadMessages();const source=new EventSource(`/api/channels/${channel.id}/stream`);source.addEventListener('message',event=>{try{const message=JSON.parse(event.data);if(state.channel?.id===channel.id){if($('#messages').querySelector('.welcome-message'))clear($('#messages'));if(!$('#messages').querySelector(`[data-message-id="${message.id}"]`))appendMessage(message);$('#messages').scrollTop=$('#messages').scrollHeight;}}catch{}});source.addEventListener('message-updated',()=>{if(state.channel?.id===channel.id)loadMessages().catch(e=>showToast(e.message));});source.addEventListener('message-deleted',()=>{if(state.channel?.id===channel.id)loadMessages().catch(e=>showToast(e.message));});source.onerror=()=>{$('#connection').style.background='var(--gc-negative)';};source.onopen=()=>{$('#connection').style.background='';};state.events=source;}
 function appendMessage(message){
   const row=el('article','message');row.dataset.messageId=message.id;
@@ -37,7 +37,7 @@ function appendMessage(message){
 async function loadMessages(){if(!state.channel)return;const id=state.channel.id;const {messages}=await api(`/channels/${id}/messages`);if(state.channel?.id!==id)return;clear($('#messages'));if(!messages.length){const welcome=el('div','welcome-message');welcome.append(el('span','welcome-symbol','#'),el('h2','','This is the beginning of #'+state.channel.name),el('p','','Start a conversation. Everyone with access to this channel can join in.'));$('#messages').append(welcome);}messages.forEach(appendMessage);$('#messages').scrollTop=$('#messages').scrollHeight;}
 $('#message-form').addEventListener('submit',async e=>{e.preventDefault();if(!state.channel)return;const input=$('#message-input'),value=input.value;if(!value.trim())return;try{await api(`/channels/${state.channel.id}/messages`,{method:'POST',data:{body:value,...(state.replyTo?{parentId:state.replyTo.id}:{})}});input.value='';state.replyTo=null;$('#reply-banner').hidden=true;if(state.events?.readyState!==EventSource.OPEN)await loadMessages();}catch(err){showToast(err.message);}});
 $('#message-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#message-form').requestSubmit();}});
-async function selectTool(tool){if(state.events){state.events.close();state.events=null;}view(tool,({tasks:'Tasks',notes:'Notes',files:'Files',search:'Search',members:'Members'})[tool]||tool,'YOUR TOOLS');if(tool==='tasks')await loadTasks();if(tool==='notes')await loadNotes();if(tool==='files')await loadFiles();if(tool==='members')await loadMembers();}
+async function selectTool(tool){if(state.events){state.events.close();state.events=null;}view(tool,({tasks:'Tasks',notes:'Notes',search:'Search',members:'Members'})[tool]||tool,'YOUR TOOLS');if(tool==='tasks')await loadTasks();if(tool==='notes')await loadNotes();if(tool==='members')await loadMembers();}
 document.querySelectorAll('[data-tool]').forEach(button=>button.addEventListener('click',()=>selectTool(button.dataset.tool)));
 $('#cancel-reply').addEventListener('click',()=>{state.replyTo=null;$('#reply-banner').hidden=true;});
 $('#quick-tasks').addEventListener('click',()=>selectTool('tasks'));$('#quick-notes').addEventListener('click',()=>selectTool('notes'));
@@ -51,20 +51,6 @@ async function loadMembers(){
     }
     list.append(row);
   }
-  const management=$('#invite-management');management.hidden=state.space.role!=='owner';
-  if(!management.hidden){
-    const {invites}=await api(`/spaces/${state.space.id}/invites`);
-    const list=$('#invite-list');clear(list);
-    if(!invites.length)list.append(el('p','muted','No active invitations.'));
-    for(const invite of invites){
-      const row=el('div','member-row');
-      row.append(el('span','',`Expires ${new Date(invite.expiresAt).toLocaleString()}`));
-      const revoke=el('button','small-outline','Revoke');revoke.type='button';
-      revoke.addEventListener('click',async()=>{try{await api(`/spaces/${state.space.id}/invites/${invite.id}`,{method:'DELETE'});await loadMembers();showToast('Invitation revoked.');}catch(error){showToast(error.message);}});
-      row.append(revoke);list.append(row);
-    }
-  }
-
 }
 $('#search-form').addEventListener('submit',async event=>{
   event.preventDefault();const query=$('#search-input').value.trim();if(query.length<2)return;
@@ -81,37 +67,6 @@ $('#search-form').addEventListener('submit',async event=>{
       }
     }
   }catch(e){clear(results);showToast(e.message);}
-});
-async function loadFiles(){
-  const spaceId=state.space.id;
-  const {files}=await api(`/spaces/${spaceId}/files`);
-  if(state.space?.id!==spaceId)return;
-  const list=$('#file-list');clear(list);
-  if(!files.length){list.append(el('p','muted','No files yet. Choose a small file to share with members of this space.'));return;}
-  for(const file of files){
-    const row=el('div','file-row');
-    const meta=el('div','file-meta');meta.append(el('strong','',file.name),el('small','muted',`${(file.size/1024).toFixed(1)} KiB · ${new Date(file.uploadedAt).toLocaleDateString()}`));
-    const link=el('a','small-outline','Download');link.href=`/api/files/${file.id}/download`;link.download=file.name;
-    row.append(meta,link);
-    if(file.uploaderId===state.user.id||state.space.role==='owner'){
-      const remove=el('button','quiet','Remove');remove.type='button';remove.setAttribute('aria-label',`Remove ${file.name}`);
-      remove.addEventListener('click',async()=>{if(!confirm(`Delete ${file.name} from this space?`))return;try{await api(`/files/${file.id}`,{method:'DELETE'});await loadFiles();}catch(e){showToast(e.message);}});
-      row.append(remove);
-    }
-    list.append(row);
-  }
-}
-$('#file-form').addEventListener('submit',async event=>{
-  event.preventDefault();
-  const file=$('#file-input').files?.[0];if(!file)return;
-  if(file.size===0||file.size>2*1024*1024){showToast('Choose a nonempty file up to 2 MiB.');return;}
-  const button=event.currentTarget.querySelector('button[type="submit"]');button.disabled=true;
-  const spaceId=state.space.id;
-  try{
-    const response=await fetch(`/api/spaces/${spaceId}/files?name=${encodeURIComponent(file.name)}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file,credentials:'same-origin'});
-    const result=await response.json();if(!response.ok)throw new Error(result.error||'Upload failed');
-    $('#file-input').value='';if(state.space?.id===spaceId)await loadFiles();showToast('File saved to this private space.');
-  }catch(error){showToast(error.message);}finally{button.disabled=false;}
 });
 async function loadTasks(){const {tasks}=await api(`/spaces/${state.space.id}/tasks`);const list=$('#task-list');clear(list);if(!tasks.length){list.append(el('p','muted','All clear. Add a task to get started.'));return;}tasks.forEach(task=>{const row=el('div','task-row'),check=el('input'),label=el('span',task.done?'completed':'',task.title),remove=el('button','quiet','Remove');check.type='checkbox';check.checked=!!task.done;check.setAttribute('aria-label','Complete '+task.title);check.addEventListener('change',async()=>{try{await api(`/tasks/${task.id}`,{method:'PATCH',data:{done:check.checked}});await loadTasks();}catch(e){showToast(e.message);await loadTasks();}});remove.type='button';remove.setAttribute('aria-label','Remove '+task.title);remove.addEventListener('click',async()=>{try{await api(`/tasks/${task.id}`,{method:'DELETE'});await loadTasks();}catch(e){showToast(e.message);}});row.append(check,label,remove);list.append(row);});}
 $('#task-form').addEventListener('submit',async e=>{e.preventDefault();const input=$('#task-title');try{await api(`/spaces/${state.space.id}/tasks`,{method:'POST',data:{title:input.value}});input.value='';await loadTasks();}catch(err){showToast(err.message);}});
