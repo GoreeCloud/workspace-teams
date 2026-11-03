@@ -46,6 +46,19 @@ The restore command validates SQLite integrity and foreign keys, rejects nonempt
 
 Changes to `src/server.mjs` schema require compatible, versioned migrations before upgrades are supported. Do not overwrite unknown preexisting data or promote this alpha to a production release.
 
+## Authenticated encrypted snapshots and isolated restores
+
+Use a strong unique passphrase in a regular private file outside the repository and archive destination (`chmod 600 /private/backup-key` on Unix; do not place it in command arguments, shell history, or source control).
+
+```sh
+npm run backup:encrypted -- --db ./data/workspace.sqlite --output ./backups/workspace.gcws --passphrase-file /private/backup-key
+npm run restore:encrypted -- --from ./backups/workspace.gcws --dest ./test-restored --passphrase-file /private/backup-key
+```
+
+The `GCWSENC1` archive is a single authenticated AES-256-GCM envelope containing the SQLite snapshot and attached files, with a random 16-byte scrypt salt (`N=32768, r=8, p=1`), random 12-byte nonce, 16-byte GCM authentication tag, and signed manifest/file digests. On restore the entire archive is decrypted and authenticated in a private temporary directory **before** validation and creation of the exclusive, new destination. Wrong keys, tampering, truncated files, unsafe paths, and existing destinations are refused. There is no in-place restore.
+
+**Residual risk:** the online snapshot, decryption, and integrity verification temporarily write **plaintext** to restricted OS temp storage (directories mode 0700 and files mode 0600 on Unix); removal does not guarantee forensic erasure. Use encrypted temporary storage and trusted local administration. Losing the key makes recovery impossible. The existing `backup` and `restore` commands still produce and consume **unencrypted** snapshots. Scheduling, offsite redundancy, secret escrow, retention policy, host-level recovery and production acceptance remain outstanding.
+
 ## Build and test gates
 
 CI performs `npm run check` and `npm test` on Node 22.16.0. These cover syntax, first-user bootstrap, space permissions, message editing/replies/removal, authorization-scoped search, invitation use, owner revocation with live-stream closure, online backup integrity and origin rejection. They now include an isolated attachment restore-and-download test and owner invitation-revocation tests. They do not cover real browser visual interaction, mobile/native packaging, Docker runtime, accessibility audit, load, or production security acceptance.

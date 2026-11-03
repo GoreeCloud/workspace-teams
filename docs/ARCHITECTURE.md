@@ -69,3 +69,8 @@ The on-demand backup CLI snapshots SQLite first and copies only files referenced
 - `POST /api/account/password`: verify the old password; in a transaction, rotate salted credentials, delete all prior sessions and create a fresh current-browser session; terminate all prior SSE streams.
 
 These routes use the existing session cookie, strict request-Origin checks for writes, and in-process per-user/IP rate limits. GoreeCloud UI visual acceptance remains pending.
+
+
+## Encrypted backup envelope (alpha)
+
+`scripts/secure-archive.mjs` composes the existing verified online SQLite/attachment backup and isolated restore services. `GCWSENC1` consists of magic/version, per-file random scrypt salt and AES-GCM nonce, ciphertext over a length-prefixed manifest with SHA-256 digests followed by file bytes, and an authenticated GCM tag. Only a SQLite file and UUID-named attachment entries are accepted during extraction. Restore authenticates before parsing any decrypted data and invokes existing SQLite/foreign-key/attachment checks into a new directory. It is an offline maintenance path, **not** live database encryption.

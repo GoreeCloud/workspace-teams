@@ -1,5 +1,12 @@
 # Development History
 
+## 2026-11-03 — Authenticated encrypted backup and isolated restoration
+
+- Added optional `GCWSENC1` AES-256-GCM/scrypt single-file SQLite-plus-attachments archives, authenticated manifest and integrity checks, and fail-closed key/tamper validation.
+- Added separate-file key protection, no-overwrite restore, restricted temporary staging and end-to-end regression coverage.
+- Production security review, encrypted temporary storage, automatic scheduling, key escrow and live host recovery remain pending.
+
+
 ## 2026-11-03 — Private files and attachment recovery increment
 
 **Status:** local implementation and tests; remote CI and visual review require independent verification.
