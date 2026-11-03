@@ -1,0 +1,12 @@
+# Example only. This timer is not enabled or installed automatically.
+[Unit]
+Description=Daily GoreeCloud Workspace Teams encrypted backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=10m
+Unit=workspace-teams-backup.service
+
+[Install]
+WantedBy=timers.target
