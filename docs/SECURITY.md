@@ -47,3 +47,10 @@ Do not post secrets, personal database files, authentication cookies or private 
 ## Verified isolated restore (alpha)
 
 `npm run restore -- --from BACKUP.sqlite --dest NEW_DIRECTORY` restores only to a nonexistent directory. It validates database integrity, foreign keys, attachment contents and nonempty WAL sidecars. This is not a production restore service, does not decrypt snapshots and does not establish complete disaster-recovery readiness. Keep all backups and restores private and never restore directly over a running instance.
+
+
+## Account security controls (alpha)
+
+Authenticated users can query `GET /api/account/security` for an aggregate active-session count, call `POST /api/account/sessions/revoke-others` to revoke other sessions, and call `POST /api/account/password` with `currentPassword` and `newPassword` to rotate credentials and all session cookies. Rotation requires the existing password, a different new password of 12–256 characters, and rate limiting. Both revocation actions close affected live channel streams; no raw session secrets are returned.
+
+This is not a device inventory. Device names, login history, alerts, MFA and durable distributed abuse prevention are not implemented. In-flight requests may require further endpoint-specific invalidation checks. TLS, host security and a complete security review remain necessary before public exposure.

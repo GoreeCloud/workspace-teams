@@ -125,5 +125,11 @@ function openNote(note){openModal({eyebrow:note?'EDIT NOTE':'NEW NOTE',title:not
 $('#new-note').addEventListener('click',()=>openNote(null));
 $('#invite-btn').addEventListener('click',async()=>{try{const {invite}=await api(`/spaces/${state.space.id}/invites`,{method:'POST',data:{}});const url=new URL(location.origin);url.searchParams.set('invite',invite);openModal({eyebrow:'INVITATION',title:'Bring someone in',description:'This one-time link expires after 24 hours. Share it privately with someone you trust.',fields:[{name:'url',label:'Private invitation link',value:url.toString(),required:false}],submit:'Copy link',action:async data=>{await navigator.clipboard.writeText(data.url);showToast('Invitation link copied.');}});}catch(err){showToast(err.message);}});
 $('#logout').addEventListener('click',async()=>{try{await api('/logout',{method:'POST'});if(state.events)state.events.close();state.user=null;await initialize();}catch(err){showToast(err.message);}});
-$('#profile-menu').addEventListener('click',()=>showToast('You are signed in to your self-hosted workspace.'));
+const accountDialog=$('#account-dialog');
+async function refreshAccountSecurity(){const result=await api('/account/security');$('#account-session-count').textContent=result.activeSessions+' active session'+(result.activeSessions===1?'':'s')+' on this account.';}
+$('#profile-menu').addEventListener('click',async()=>{accountDialog.showModal();try{await refreshAccountSecurity();}catch(e){showToast(e.message);}});
+$('#account-close').addEventListener('click',()=>accountDialog.close());
+$('#account-revoke').addEventListener('click',async event=>{event.currentTarget.disabled=true;try{const result=await api('/account/sessions/revoke-others',{method:'POST'});await refreshAccountSecurity();showToast(result.revoked+' other session'+(result.revoked===1?'':'s')+' signed out.');}catch(e){showToast(e.message);}finally{event.currentTarget.disabled=false;}});
+$('#account-password-form').addEventListener('submit',async event=>{event.preventDefault();const submit=event.currentTarget.querySelector('button[type="submit"]');submit.disabled=true;const data=Object.fromEntries(new FormData(event.currentTarget));try{await api('/account/password',{method:'POST',data});event.currentTarget.reset();accountDialog.close();if(state.events)state.events.close();state.events=null;await initialize();showToast('Password updated. Other sessions have been signed out.');}catch(e){showToast(e.message);}finally{submit.disabled=false;}});
+
 initialize();

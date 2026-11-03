@@ -152,3 +152,8 @@ Target: validated encrypted/full/incremental backups, restore drills, portable i
 ## Product structure and implementation order
 
 Core, Identity, Spaces, Channels, Messenger, Realtime, Voice, Video, Events, Social, Files, Documents, Tasks, Search, Notifications, Workflows, Apps, Security, Administration and Operations remain separately definable domains. Prioritize: **(1)** storage/auth/security/backup foundation; **(2)** robust messaging and permissions; **(3)** tasks/notes collaboration and file safety; **(4)** search, moderation and notifications; **(5)** self-hosted voice/video; **(6)** events, forums, integrations and native clients. Promote capability status only with direct test and review evidence.
+
+
+### Account security increment (2026-11-03)
+
+Early alpha users can count active sessions, revoke other sessions, and change their password while invalidating previous cookies and live streams. Regression tests cover these limited controls. Passkeys, MFA, device inventory, account recovery and comprehensive security remain planned.
