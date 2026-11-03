@@ -32,10 +32,10 @@ This document organizes all **28 capability areas** from the founder's supplied 
 | 22 | Bots, applications, integrations | Planned | — |
 | 23 | Developer APIs and extensibility | Partial | Versionless internal JSON API; no supported third-party SDK |
 | 24 | Security, identity, privacy | Partial | scrypt, sessions, same-origin writes, membership enforcement, CSP |
-| 25 | Data governance and administration | Partial | Owner-permitted channel creation, invitations, membership removal, scoped JSON exports with optional verified file bytes, and offline verification; safe import and governance suite pending |
+| 25 | Data governance and administration | Partial | Owner-controlled membership and invitations; scoped v1/v2 JSON exports, offline verification and isolated v2-only import; broader governance pending |
 | 26 | GoreeCloud UI and accessibility | Partial | Semantic tokens, responsive UI, keyboard/focus/reduced-motion basics |
 | 27 | Cross-platform and offline | Partial | Responsive web; browser offline and native clients pending |
-| 28 | Backup, recovery, migration, reliability | Partial | Integrity-checked SQLite plus attachments; optional encrypted archive, isolated restore, one-shot scheduler; no deployed recovery automation |
+| 28 | Backup, recovery, migration, reliability | Partial | Integrity-checked SQLite/attachments, encrypted archive, isolated restore, one-shot scheduler, and non-overwriting offline v2 space import; no production recovery automation |
 
 ## 1. Self-hosting and deployment
 
@@ -135,7 +135,7 @@ Target: secure authentication, MFA, passkeys, federated identity optionality, RB
 
 ## 25. Administration and data governance
 
-Target: instance and delegated admin roles, group provisioning, space/channel/app/workflow management, policy enforcement, retention, holds, authorized exports, DLP, emergency controls, recovery and audit records. For personal users keep settings simple and optional. **Current:** owner/member permissions, owner-controlled invitations, member listing and removal; comprehensive governance is pending.
+Target: instance and delegated admin roles, group provisioning, space/channel/app/workflow management, policy enforcement, retention, holds, authorized exports, DLP, emergency controls, recovery and audit records. For personal users keep settings simple and optional. **Current:** owner/member permissions, owner-controlled invitations and membership removal; owner-only scoped v1/v2 JSON exports and offline verification; isolated v2-only import into a new instance with newly issued owner credentials. Full governance, retention and production migration remain pending.
 
 ## 26. GoreeCloud UI and accessibility
 
@@ -147,7 +147,7 @@ Target: Linux/Windows/macOS desktop, Android/iOS, PWA, tablet and browser client
 
 ## 28. Backup, recovery, migration and reliability
 
-Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Unencrypted snapshots remain supported; optional authenticated encrypted archives and isolated decrypt/restore are implemented with automated tampering, wrong-key and attachment tests. A one-shot encrypted backup command and optional systemd examples exist but are not activated. Owner-scoped JSON v1 metadata and bounded v2 attachment-inclusive exports plus read-only offline verification are available; data import is not. Independent key recovery, offsite replication, cross-version migration and production disaster-recovery acceptance are pending.
+Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Unencrypted snapshots remain supported; optional authenticated encrypted archives and isolated decrypt/restore are implemented with automated tampering, wrong-key and attachment tests. A one-shot encrypted backup command and optional systemd examples exist but are not activated. Owner-scoped JSON v1 metadata and bounded v2 attachment-inclusive exports, read-only offline verification, and a v2-only non-overwriting isolated import into a new instance are available. There is no in-place merge or restoration of original user credentials/sessions/memberships. Independent key recovery, offsite replication, cross-version migration and production disaster-recovery acceptance are pending.
 
 ## Product structure and implementation order
 
