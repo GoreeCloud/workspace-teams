@@ -12,7 +12,7 @@
 
 ## Persistence model
 
-`users`, `sessions`, `spaces`, `memberships`, `channels`, `messages`, `tasks`, `notes`, `invites`. IDs are random UUIDs; invitations and sessions are random 256-bit secrets represented by SHA-256 digests in storage. Session expiration is checked on each authenticated HTTP request. The authoritative database is owned by the running server; do not directly edit tables while serving traffic.
+`users`, `sessions`, `spaces`, `memberships`, `channels`, `messages`, `tasks`, `notes`, `invites`. IDs are random UUIDs; invitations and sessions are random 256-bit secrets represented by SHA-256 digests in storage. Session expiration is checked for requests and SSE events; owner removal closes affected streams. The authoritative database is owned by the running server; do not directly edit tables while serving traffic.
 
 ## Security boundaries
 
@@ -37,5 +37,8 @@ HTTP only on localhost during development. In production, HTTPS reverse proxy mu
 - `POST /api/spaces/:id/invites`
 - `GET/POST /api/channels/:id/messages`, `GET /api/channels/:id/stream`
 - `PATCH/DELETE /api/tasks/:id`, `PATCH/DELETE /api/notes/:id`
+- `GET /api/spaces/:id/members`, `DELETE /api/spaces/:id/members/:memberId`
+- `POST /api/invites/accept`, `GET /api/search?q=...&spaceId=...`
+- `PATCH/DELETE /api/messages/:id` (author or owner)
 
 No `/api/v1` interface has been promised; support policies and compatibility versioning must be established before third-party clients depend on these paths.
