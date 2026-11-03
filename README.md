@@ -52,6 +52,15 @@ npm run restore -- --from ./backups/workspace-2026-11-03.sqlite --dest ./restore
 
 This checks the database and every attachment before creating `restored-test-instance/workspace.sqlite` and its `.files` directory. It never overwrites an existing destination. Use offline snapshots and a disposable test instance; host-level recovery acceptance is still pending. See [deployment guidance](docs/DEPLOYMENT.md).
 
+### Optional encrypted recovery (alpha)
+
+```sh
+npm run backup:encrypted -- --db ./data/workspace.sqlite --output ./backups/workspace.gcws --passphrase-file /private/backup-key
+npm run restore:encrypted -- --from ./backups/workspace.gcws --dest ./test-restored --passphrase-file /private/backup-key
+```
+
+A private passphrase file (`chmod 600` on Unix) is required. The self-contained AES-256-GCM archive includes verified SQLite and private attachments; it never overwrites existing output. **Keep the key in secure storage separate from the backups**. On-demand snapshot/decryption temporarily writes plaintext to restricted OS temporary storage; encrypted disk and a tested recovery plan remain necessary for sensitive data. No schedules or public deployment are configured.
+
 ## Documentation
 
 - [Complete target and delivery status](docs/CAPABILITIES.md)

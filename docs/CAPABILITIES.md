@@ -147,7 +147,7 @@ Target: Linux/Windows/macOS desktop, Android/iOS, PWA, tablet and browser client
 
 ## 28. Backup, recovery, migration and reliability
 
-Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Backups are **not encrypted**, scheduled or restore-drill certified, and production recovery is pending.
+Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Unencrypted snapshots remain supported; optional authenticated encrypted archives and isolated decrypt/restore are implemented with automated tampering, wrong-key and attachment tests. Scheduling, key recovery, cross-version migration and production disaster-recovery acceptance are pending.
 
 ## Product structure and implementation order
 

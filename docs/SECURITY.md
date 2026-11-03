@@ -38,7 +38,7 @@ Do not post secrets, personal database files, authentication cookies or private 
 
 ## Backup and search residual risks
 
-- Backups are **not encrypted** and may include password hashes, session digests, messages and all uploaded attachments. The `.sqlite` file and optional `.sqlite.files` directory must be retained/restored **together** with private permissions.
+- Plain SQLite-plus-sidecar backups are **not encrypted** and may include password hashes, session digests, messages and all uploaded attachments. The `.sqlite` file and optional `.sqlite.files` directory must be retained/restored **together** with private permissions.
 - An isolated API-level snapshot/restore test verifies authenticated downloads after restoration, but broader cross-version migrations, real host filesystem restores and operational recovery procedures are unverified. Rehearse a full host-specific restore before relying on backups.
 - Query search scans eligible rows using SQLite `LIKE`; bounded limits protect responses, not worst-case CPU or database growth. Implement indexing and search abuse defenses before scaling.
 - The UI smoke test in a managed headless browser was blocked by browser administration policy. Syntax/API tests do not count as a complete visual/accessibility audit.
@@ -54,3 +54,12 @@ Do not post secrets, personal database files, authentication cookies or private 
 Authenticated users can query `GET /api/account/security` for an aggregate active-session count, call `POST /api/account/sessions/revoke-others` to revoke other sessions, and call `POST /api/account/password` with `currentPassword` and `newPassword` to rotate credentials and all session cookies. Rotation requires the existing password, a different new password of 12–256 characters, and rate limiting. Both revocation actions close affected live channel streams; no raw session secrets are returned.
 
 This is not a device inventory. Device names, login history, alerts, MFA and durable distributed abuse prevention are not implemented. In-flight requests may require further endpoint-specific invalidation checks. TLS, host security and a complete security review remain necessary before public exposure.
+
+
+## Optional encrypted snapshot security boundary
+
+`backup:encrypted` and `restore:encrypted` provide versioned `GCWSENC1` AES-256-GCM encryption/authentication with per-archive random salt/nonce and scrypt-derived key (`N=32768, r=8, p=1`). The header, manifest, SQLite bytes and attachment bytes are authenticated. Decryption must finish and validate the GCM tag before processing any recovered data or creating the restore destination; additional SHA-256 and SQLite/foreign-key/attachment checks follow.
+
+The passphrase is read from a regular private file, not a CLI argument. Unix permission checks reject group/world-readable files; symlinked files are rejected. A minimum 16-byte passphrase is enforced (long random credentials are recommended). Keep the key separate from archives; losing it makes the archive unrecoverable.
+
+**Security limitations:** both backup creation and restore temporarily stage unencrypted database/attachments in restricted OS temp directories, and ordinary deletion is not secure erasure. No host-compromise defense, scheduled/offsite backup, automatic key management, recovery assurance or full independent cryptographic audit is claimed. The older `backup` command remains unencrypted.
