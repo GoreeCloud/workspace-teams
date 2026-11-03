@@ -1,0 +1,258 @@
+import { createServer } from 'node:http';
+import { readFileSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
+import { randomBytes, randomUUID, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const contentTypes = {'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/styles.css':'text/css; charset=utf-8','/favicon.svg':'image/svg+xml'};
+const assetPaths = {'/':'index.html','/app.js':'app.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
+const selectUser = 'SELECT id, username, display_name AS displayName FROM users WHERE id = ?';
+const now = () => new Date().toISOString();
+const digest = value => createHash('sha256').update(value).digest('hex');
+const token = () => randomBytes(32).toString('base64url');
+const passwordHash = (password, salt) => scryptSync(password, salt, 64).toString('hex');
+const validText = (value, max, min = 1) => typeof value === 'string' && value.trim().length >= min && value.trim().length <= max;
+
+function init(db) {
+  db.exec(`PRAGMA foreign_keys = ON;
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, display_name TEXT NOT NULL, salt TEXT NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS spaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('personal','family','community','team')), owner_id TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS memberships (space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK(role IN ('owner','member')), PRIMARY KEY(space_id,user_id));
+    CREATE TABLE IF NOT EXISTS channels (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE, author_id TEXT NOT NULL REFERENCES users(id), body TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id,created_at);
+    CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, author_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, author_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS invites (token_hash TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, created_by TEXT NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL, used_by TEXT REFERENCES users(id));`);
+}
+
+export function createApplication({dbPath = process.env.DATA_PATH || './data/workspace.sqlite', origin = process.env.APP_ORIGIN || 'http://localhost:3000'} = {}) {
+  if (!/^https?:\/\//.test(origin)) throw new Error('APP_ORIGIN must be an HTTP(S) origin');
+  const normalizedOrigin = new URL(origin).origin;
+  mkdirSync(dirname(resolve(dbPath)), {recursive:true, mode:0o700});
+  const db = new DatabaseSync(dbPath);
+  init(db);
+  const streams = new Map();
+  const attempts = new Map();
+  const get = (sql, ...args) => db.prepare(sql).get(...args);
+  const all = (sql, ...args) => db.prepare(sql).all(...args);
+  const run = (sql, ...args) => db.prepare(sql).run(...args);
+  function send(res, status, body, extra={}) {
+    res.writeHead(status, {'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', ...extra});
+    res.end(JSON.stringify(body));
+  }
+  function error(res, status, message) { send(res,status,{error:message}); }
+  async function body(req) {
+    let size = 0; const chunks = [];
+    for await (const chunk of req) {
+      size += chunk.length;
+      if(size > 32_768) { const e = new Error('Request too large'); e.status=413; throw e; }
+      chunks.push(chunk);
+    }
+    try { const data=JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!data || Array.isArray(data) || typeof data !== 'object') throw new Error(); return data; }
+    catch { const e=new Error('Invalid JSON object'); e.status=400; throw e; }
+  }
+  function getUser(req) {
+    const cookie = req.headers.cookie || '';
+    const sessionValue = cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith('gc_session='))?.slice(11);
+    if(!sessionValue || !/^[A-Za-z0-9_-]{43}$/.test(sessionValue)) return null;
+    return get(`SELECT u.id,u.username,u.display_name AS displayName FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?`,digest(sessionValue),Date.now());
+  }
+  function establishSession(res, userId) {
+    const value=token(), sevenDays=7*24*3600;
+    run('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',digest(value),userId,Date.now()+sevenDays*1000);
+    res.setHeader('Set-Cookie',`gc_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${sevenDays}${normalizedOrigin.startsWith('https:')?'; Secure':''}`);
+  }
+  function membership(spaceId,userId) {return get('SELECT role FROM memberships WHERE space_id=? AND user_id=?',spaceId,userId)?.role || null;}
+  function channelSpace(channelId) {return get('SELECT space_id AS spaceId FROM channels WHERE id=?',channelId)?.spaceId;}
+  function limit(ip, action, max, intervalMs) {
+    const key=`${ip}:${action}`, t=Date.now(), prev=attempts.get(key) || [], recent=prev.filter(x=>t-x<intervalMs);
+    if (recent.length>=max) return false;
+    recent.push(t); attempts.set(key,recent);
+    if(attempts.size>10000) attempts.clear();
+    return true;
+  }
+  function broadcast(channelId,message) {
+    for(const res of streams.get(channelId)||[]) {try {res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`);} catch {streams.get(channelId)?.delete(res);}}
+  }
+  function createSpace(userId, name,kind) {
+    const spaceId=randomUUID(), channelId=randomUUID(), time=now();
+    run('INSERT INTO spaces(id,name,kind,owner_id,created_at) VALUES(?,?,?,?,?)',spaceId,name,kind,userId,time);
+    run("INSERT INTO memberships(space_id,user_id,role) VALUES(?,?,'owner')",spaceId,userId);
+    run('INSERT INTO channels(id,space_id,name,created_at) VALUES(?,?,?,?)',channelId,spaceId,'general',time);
+    return spaceId;
+  }
+  const server=createServer(async (req,res) => {
+    res.setHeader('X-Content-Type-Options','nosniff');
+    res.setHeader('Referrer-Policy','no-referrer');
+    res.setHeader('X-Frame-Options','DENY');
+    res.setHeader('Content-Security-Policy',"default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    const method=req.method || 'GET';
+    let path, searchParams;
+    try {({pathname:path,searchParams}=new URL(req.url,normalizedOrigin));} catch {return error(res,400,'Invalid URL');}
+    if (method==='GET' && Object.hasOwn(assetPaths,path)) {
+      const file=resolve(root,'public',assetPaths[path]);
+      res.writeHead(200,{'Content-Type':contentTypes[path], 'Cache-Control':path==='/'?'no-store':'public,max-age=3600'});
+      return res.end(readFileSync(file));
+    }
+    if(path==='/api/health' && method==='GET') return send(res,200,{status:'ok'});
+    if(!path.startsWith('/api/')) return error(res,404,'Not found');
+    if(['POST','PATCH','DELETE'].includes(method) && req.headers.origin!==normalizedOrigin) return error(res,403,'Origin mismatch');
+    const ip=req.socket.remoteAddress || 'unknown';
+    try {
+      if(path==='/api/me' && method==='GET') {
+        const user=getUser(req);
+        return send(res,200,{initialized:!!get('SELECT id FROM users LIMIT 1'),user:user||null});
+      }
+      if(path==='/api/bootstrap' && method==='POST') {
+        if(!limit(ip,'login',12,15*60_000)) return error(res,429,'Too many attempts');
+        if(get('SELECT id FROM users LIMIT 1')) return error(res,409,'Instance already initialized');
+        const data=await body(req), name=data.username?.trim(), display=data.displayName?.trim()||name;
+        if(!/^[a-zA-Z0-9_-]{3,32}$/.test(name||'')||!validText(display,80)||!validText(data.password,256,12)) return error(res,400,'Username (3–32), display name, and password (12+ chars) required');
+        const id=randomUUID(), salt=randomBytes(16).toString('hex');
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          if(get('SELECT id FROM users LIMIT 1')) {db.exec('ROLLBACK');return error(res,409,'Instance already initialized');}
+          run('INSERT INTO users(id,username,display_name,salt,password_hash,created_at) VALUES(?,?,?,?,?,?)',id,name,display,salt,passwordHash(data.password,salt),now());
+          createSpace(id,'My Space','personal');
+          db.exec('COMMIT');
+        } catch(e) {db.exec('ROLLBACK');throw e;}
+        establishSession(res,id);
+        return send(res,201,{user:get(selectUser,id)});
+      }
+      if(path==='/api/login' && method==='POST') {
+        if(!limit(ip,'login',12,15*60_000)) return error(res,429,'Too many attempts');
+        const data=await body(req); const record=typeof data.username==='string'?get('SELECT * FROM users WHERE username=?',data.username.trim()):null;
+        const salt=record?.salt || '00000000000000000000000000000000';
+        const supplied=passwordHash(typeof data.password==='string'?data.password:'',salt);
+        if(!record || !timingSafeEqual(Buffer.from(supplied,'hex'),Buffer.from(record.password_hash,'hex'))) return error(res,401,'Invalid credentials');
+        establishSession(res,record.id);
+        return send(res,200,{user:get(selectUser,record.id)});
+      }
+      if(path==='/api/register' && method==='POST') {
+        if(!limit(ip,'login',12,15*60_000))return error(res,429,'Too many attempts');
+        const data=await body(req), name=data.username?.trim(), display=data.displayName?.trim()||name;
+        if(!/^[a-zA-Z0-9_-]{3,32}$/.test(name||'')||!validText(display,80)||!validText(data.password,256,12)||typeof data.invite!=='string')return error(res,400,'Valid invitation, username, display name, and password required');
+        const invitation=get('SELECT * FROM invites WHERE token_hash=? AND used_by IS NULL AND expires_at>?',digest(data.invite),Date.now());
+        if(!invitation)return error(res,400,'Invitation invalid or expired');
+        const id=randomUUID(),salt=randomBytes(16).toString('hex');
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          const active=get('SELECT * FROM invites WHERE token_hash=? AND used_by IS NULL AND expires_at>?',digest(data.invite),Date.now());
+          if(!active){db.exec('ROLLBACK');return error(res,409,'Invitation has already been used');}
+          run('INSERT INTO users(id,username,display_name,salt,password_hash,created_at) VALUES(?,?,?,?,?,?)',id,name,display,salt,passwordHash(data.password,salt),now());
+          createSpace(id,'My Space','personal');
+          run("INSERT INTO memberships(space_id,user_id,role) VALUES(?,?,'member')",active.space_id,id);
+          run('UPDATE invites SET used_by=? WHERE token_hash=?',id,digest(data.invite));
+          db.exec('COMMIT');
+        }catch(e){db.exec('ROLLBACK');if(e?.code?.includes('CONSTRAINT'))return error(res,409,'Username already taken');throw e;}
+        establishSession(res,id);return send(res,201,{user:get(selectUser,id)});
+      }
+      const user=getUser(req);
+      if(!user) return error(res,401,'Sign in required');
+      if(path==='/api/logout' && method==='POST') {
+        const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gc_session='))?.slice(11);
+        if(value)run('DELETE FROM sessions WHERE token_hash=?',digest(value));
+        res.setHeader('Set-Cookie','gc_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+        return send(res,200,{ok:true});
+      }
+      if(path==='/api/spaces' && method==='GET') return send(res,200,{spaces:all(`SELECT s.id,s.name,s.kind,m.role FROM spaces s JOIN memberships m ON m.space_id=s.id WHERE m.user_id=? ORDER BY s.created_at`,user.id)});
+      if(path==='/api/spaces' && method==='POST') {
+        const data=await body(req);if(!validText(data.name,80)||!['personal','family','community','team'].includes(data.kind))return error(res,400,'Invalid space');
+        const id=createSpace(user.id,data.name.trim(),data.kind);return send(res,201,{id});
+      }
+      const spaceRoute=path.match(/^\/api\/spaces\/([0-9a-f-]{36})\/(channels|tasks|notes|invites)$/);
+      if(spaceRoute) {
+        const [,spaceId,section]=spaceRoute, role=membership(spaceId,user.id);
+        if(!role) return error(res,404,'Space not found');
+        if(section==='channels') {
+          if(method==='GET')return send(res,200,{channels:all('SELECT id,name FROM channels WHERE space_id=? ORDER BY created_at',spaceId)});
+          if(method==='POST'){
+            if(role!=='owner')return error(res,403,'Owner access required');
+            const data=await body(req);if(!/^[a-zA-Z0-9_-]{2,48}$/.test(data.name||''))return error(res,400,'Invalid channel name');
+            const id=randomUUID();run('INSERT INTO channels(id,space_id,name,created_at) VALUES(?,?,?,?)',id,spaceId,data.name,now());return send(res,201,{id});
+          }
+        }
+        if(section==='tasks') {
+          if(method==='GET')return send(res,200,{tasks:all('SELECT id,title,done,created_at AS createdAt FROM tasks WHERE space_id=? ORDER BY created_at DESC',spaceId)});
+          if(method==='POST'){
+            const data=await body(req);if(!validText(data.title,300))return error(res,400,'Invalid title');
+            const id=randomUUID();run('INSERT INTO tasks(id,space_id,author_id,title,created_at) VALUES(?,?,?,?,?)',id,spaceId,user.id,data.title.trim(),now());return send(res,201,{id});
+          }
+        }
+        if(section==='notes') {
+          if(method==='GET')return send(res,200,{notes:all('SELECT id,title,body,updated_at AS updatedAt FROM notes WHERE space_id=? ORDER BY updated_at DESC',spaceId)});
+          if(method==='POST'){
+            const data=await body(req);if(!validText(data.title,120)||typeof data.body!=='string'||data.body.length>20000)return error(res,400,'Invalid note');
+            const id=randomUUID();run('INSERT INTO notes(id,space_id,author_id,title,body,updated_at) VALUES(?,?,?,?,?,?)',id,spaceId,user.id,data.title.trim(),data.body,now());return send(res,201,{id});
+          }
+        }
+        if(section==='invites' && method==='POST') {
+          if(role!=='owner')return error(res,403,'Owner access required');
+          const invite=token();run('INSERT INTO invites(token_hash,space_id,created_by,expires_at) VALUES(?,?,?,?)',digest(invite),spaceId,user.id,Date.now()+24*3600_000);
+          return send(res,201,{invite,expiresInHours:24});
+        }
+      }
+      const messageRoute=path.match(/^\/api\/channels\/([0-9a-f-]{36})\/(messages|stream)$/);
+      if(messageRoute) {
+        const [,channelId,section]=messageRoute, spaceId=channelSpace(channelId);
+        if(!spaceId || !membership(spaceId,user.id)) return error(res,404,'Channel not found');
+        if(section==='messages'){
+          if(method==='GET') {
+            const before=searchParams.get('before');
+            const messages=before&&/^[0-9TZ:.\-]{20,30}$/.test(before)?all(`SELECT m.id,m.body,m.created_at AS createdAt,u.display_name AS author FROM messages m JOIN users u ON u.id=m.author_id WHERE m.channel_id=? AND m.created_at<? ORDER BY m.created_at DESC LIMIT 100`,channelId,before):all(`SELECT m.id,m.body,m.created_at AS createdAt,u.display_name AS author FROM messages m JOIN users u ON u.id=m.author_id WHERE m.channel_id=? ORDER BY m.created_at DESC LIMIT 100`,channelId);
+            return send(res,200,{messages:messages.reverse()});
+          }
+          if(method==='POST') {
+            if(!limit(`${ip}:${user.id}`,'message',120,60_000))return error(res,429,'Message rate limit');
+            const data=await body(req);if(!validText(data.body,4000))return error(res,400,'Message must be 1–4000 characters');
+            const message={id:randomUUID(),body:data.body.trim(),createdAt:now(),author:user.displayName};
+            run('INSERT INTO messages(id,channel_id,author_id,body,created_at) VALUES(?,?,?,?,?)',message.id,channelId,user.id,message.body,message.createdAt);
+            broadcast(channelId,message);return send(res,201,{message});
+          }
+        }
+        if(section==='stream' && method==='GET') {
+          res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+          res.write(': connected\n\n');
+          if(!streams.has(channelId))streams.set(channelId,new Set());
+          streams.get(channelId).add(res);
+          const heartbeat=setInterval(()=>{try {res.write(': heartbeat\n\n');}catch {res.end();}},20_000);
+          const maxAge=setTimeout(()=>res.end(),30*60_000);
+          res.on('close',()=>{clearInterval(heartbeat);clearTimeout(maxAge);streams.get(channelId)?.delete(res);});
+          return;
+        }
+      }
+      const taskRoute=path.match(/^\/api\/tasks\/([0-9a-f-]{36})$/);
+      if(taskRoute && ['PATCH','DELETE'].includes(method)) {
+        const task=get('SELECT space_id AS spaceId,author_id AS authorId FROM tasks WHERE id=?',taskRoute[1]);
+        if(!task||!membership(task.spaceId,user.id))return error(res,404,'Task not found');
+        if(task.authorId!==user.id && membership(task.spaceId,user.id)!=='owner')return error(res,403,'Not permitted');
+        if(method==='DELETE'){run('DELETE FROM tasks WHERE id=?',taskRoute[1]);return send(res,200,{ok:true});}
+        const data=await body(req);if(typeof data.done!=='boolean')return error(res,400,'done must be boolean');
+        run('UPDATE tasks SET done=? WHERE id=?',data.done?1:0,taskRoute[1]);return send(res,200,{ok:true});
+      }
+      const noteRoute=path.match(/^\/api\/notes\/([0-9a-f-]{36})$/);
+      if(noteRoute && ['PATCH','DELETE'].includes(method)){
+        const note=get('SELECT space_id AS spaceId,author_id AS authorId FROM notes WHERE id=?',noteRoute[1]);
+        if(!note||!membership(note.spaceId,user.id))return error(res,404,'Note not found');
+        if(note.authorId!==user.id && membership(note.spaceId,user.id)!=='owner')return error(res,403,'Not permitted');
+        if(method==='DELETE'){run('DELETE FROM notes WHERE id=?',noteRoute[1]);return send(res,200,{ok:true});}
+        const data=await body(req);if(!validText(data.title,120)||typeof data.body!=='string'||data.body.length>20000)return error(res,400,'Invalid note');
+        run('UPDATE notes SET title=?,body=?,updated_at=? WHERE id=?',data.title.trim(),data.body,now(),noteRoute[1]);return send(res,200,{ok:true});
+      }
+      return error(res,404,'Not found');
+    }catch(e){if(e.status)return error(res,e.status,e.message);console.error('Unhandled application error:',e?.message);return error(res,500,'Internal server error');}
+  });
+  return {server,close:()=>{for(const group of streams.values())for(const res of group)res.end();db.close();}};
+}
+
+if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
+  const port=Number(process.env.PORT || 3000), host=process.env.HOST || '127.0.0.1';
+  const app=createApplication();
+  app.server.listen(port,host,()=>console.log(`GoreeCloud Workspace Teams listening on ${host}:${port}`));
+  for(const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>app.server.close(()=>{app.close();process.exit(0);}));
+}
