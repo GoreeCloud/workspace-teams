@@ -1,34 +1,51 @@
 #!/usr/bin/env node
 /** Create a consistent, non-overwriting SQLite snapshot without stopping the application. */
 import { backup, DatabaseSync } from 'node:sqlite';
-import { existsSync, chmodSync, copyFileSync, mkdirSync, rmSync, statSync, constants } from 'node:fs';
-import { resolve, dirname, basename } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { existsSync, chmodSync, copyFileSync, mkdirSync, rmSync, statSync, constants, readFileSync, renameSync } from 'node:fs';
+import { resolve, dirname, basename, join } from 'node:path';
+import { randomBytes, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
-export async function backupDatabase({dbPath, outputPath}) {
+export async function backupDatabase({dbPath, outputPath, filesPath}) {
   if (!dbPath || !outputPath) throw new Error('Both dbPath and outputPath are required');
   const sourcePath=resolve(dbPath), targetPath=resolve(outputPath);
   if (sourcePath===targetPath) throw new Error('Backup destination must differ from source');
   if (!existsSync(sourcePath) || !statSync(sourcePath).isFile()) throw new Error('Source database not found');
-  if (existsSync(targetPath)) throw new Error('Backup destination already exists; refusing to overwrite');
+  const sourceFiles=resolve(filesPath || `${sourcePath}.files`),targetFiles=`${targetPath}.files`;
+  if (existsSync(targetPath)||existsSync(targetFiles)) throw new Error('Backup destination already exists; refusing to overwrite');
   mkdirSync(dirname(targetPath),{recursive:true,mode:0o700});
   const tempPath=resolve(dirname(targetPath),`.${basename(targetPath)}.${randomBytes(8).toString('hex')}.partial`);
   const db=new DatabaseSync(sourcePath,{readOnly:true});
+  const tempFiles=`${tempPath}.files`;let stagedSidecar=false;
   try {
     await backup(db,tempPath);
     const verified=new DatabaseSync(tempPath,{readOnly:true});
     try {
       const result=verified.prepare('PRAGMA integrity_check').get();
       if(result.integrity_check!=='ok')throw new Error('SQLite backup integrity verification failed');
+      const records=verified.prepare('SELECT id,size,sha256 FROM files ORDER BY id').all();
+      if(records.length){
+        mkdirSync(tempFiles,{recursive:false,mode:0o700});
+        for(const file of records){
+          if(!/^[0-9a-f-]{36}$/.test(file.id))throw new Error('Invalid stored attachment ID');
+          const data=readFileSync(join(sourceFiles,file.id));
+          if(data.length!==file.size||createHash('sha256').update(data).digest('hex')!==file.sha256)throw new Error(`Attachment integrity verification failed: ${file.id}`);
+          copyFileSync(join(sourceFiles,file.id),join(tempFiles,file.id),constants.COPYFILE_EXCL);
+          chmodSync(join(tempFiles,file.id),0o600);
+        }
+        renameSync(tempFiles,targetFiles);stagedSidecar=true;
+      }
+      chmodSync(tempPath,0o600);
+      copyFileSync(tempPath,targetPath,constants.COPYFILE_EXCL);
+      chmodSync(targetPath,0o600);
+      return {path:targetPath,bytes:statSync(targetPath).size,files:records.length};
     } finally { verified.close(); }
-    chmodSync(tempPath,0o600);
-    copyFileSync(tempPath,targetPath,constants.COPYFILE_EXCL);
-    chmodSync(targetPath,0o600);
-    return {path:targetPath,bytes:statSync(targetPath).size};
+  } catch(e) {
+    if(stagedSidecar && !existsSync(targetPath))rmSync(targetFiles,{recursive:true,force:true});
+    throw e;
   } finally {
     db.close();
-    rmSync(tempPath,{force:true});
+    rmSync(tempPath,{force:true});rmSync(tempFiles,{recursive:true,force:true});
   }
 }
 
@@ -37,11 +54,12 @@ if (process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)
   const value=flag=>{const at=args.indexOf(flag);return at>=0?args[at+1]:undefined;};
   const dbPath=value('--db') || process.env.DATA_PATH || './data/workspace.sqlite';
   const outputPath=value('--output');
+  const filesPath=value('--files') || process.env.FILES_PATH;
   if (!outputPath || !outputPath.trim()) {
     console.error('Usage: node scripts/backup.mjs --db ./data/workspace.sqlite --output ./backups/workspace-YYYY-MM-DD.sqlite');
     process.exitCode=2;
   } else {
-    try { const result=await backupDatabase({dbPath,outputPath}); console.log(`Verified backup: ${result.path} (${result.bytes} bytes)`); }
+    try { const result=await backupDatabase({dbPath,outputPath,filesPath}); console.log(`Verified backup: ${result.path} (${result.bytes} bytes; ${result.files} attachments)`); }
     catch(error) { console.error(`Backup failed: ${error.message}`); process.exitCode=1; }
   }
 }

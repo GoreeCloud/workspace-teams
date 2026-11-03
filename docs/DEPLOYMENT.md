@@ -28,16 +28,18 @@ For owner-managed remote access, terminate TLS at an audited reverse proxy. Poin
 
 ## Recovery and upgrade guidance
 
-**Do not copy an active WAL-mode SQLite database as a backup.** A tested snapshot command is now available:
+**Do not rely on a raw copy of an active SQLite database while WAL is active.** Use the consistent online snapshot command for a single SQLite database:
 
 ```sh
 npm run backup -- --db ./data/workspace.sqlite --output ./backups/workspace-2026-11-03.sqlite
 ```
 
-It uses SQLite's online backup API, verifies database integrity, refuses overwrite and writes the final file with restrictive permissions. Backups are **not encrypted**, scheduled or restore-drill certified. Keep them in protected storage. The provided container image does not include the scripts directory; run maintenance with a compatible trusted Node runtime and authorized filesystem access. Restore only to an isolated disposable test instance before considering any live replacement. Automated upgrades and recovery remain pending.
+The command refuses to overwrite existing backups, uses the built-in SQLite online backup API, checks database integrity, copies any referenced attachment bytes to a sibling `BACKUP.sqlite.files` directory, verifies each against its SHA-256 and size in the saved snapshot, and saves files with restrictive permissions. A missing/corrupt attachment aborts the backup without publishing a completed snapshot. It does not encrypt the resulting database; handle it as sensitive. The source path must be a readable SQLite database and the backup target must be on a suitable writable local filesystem. If a custom `FILES_PATH` is configured for the server, supply `--files` for the matching attachment directory. In the Docker preview the `scripts` directory is not included, so run this tool with a compatible host Node runtime against a trusted database/volume copy or explicitly adapted maintenance container; do not expose the database or its keys over a network.
+
+**Restore (manual rehearsal, no destructive overwrite):** stop a disposable test instance, create an empty test data directory, copy the verified backup into that directory as `workspace.sqlite` and copy any sibling `.files` folder to `workspace.sqlite.files` (unless a custom `FILES_PATH` is configured), run a test instance with `DATA_PATH` pointed to it on a private port, authenticate with a known test account, and verify spaces/messages/tasks/notes/files. Never overwrite a live production database as a restore test. An isolated automated API test has restored a private attachment and verified its authorized download, but no host-level recovery exercise, encrypted/scheduled backups, restore orchestration, versioned release migrations or disaster-recovery acceptance exists yet.
 
 Changes to `src/server.mjs` schema require compatible, versioned migrations before upgrades are supported. Do not overwrite unknown preexisting data or promote this alpha to a production release.
 
 ## Build and test gates
 
-CI performs `npm run check` and `npm test` on Node 22.16.0. These cover syntax, first-user bootstrap, access control, messages, task and note flows, invitation use, and origin rejection. They do not cover frontend browsers, mobile/native packaging, Docker runtime, accessibility audit, load, or production security acceptance.
+CI performs `npm run check` and `npm test` on Node 22.16.0. These cover syntax, first-user bootstrap, space permissions, message editing/replies/removal, authorization-scoped search, invitation use, owner revocation with live-stream closure, online backup integrity and origin rejection. They now include an isolated attachment restore-and-download test and owner invitation-revocation tests. They do not cover real browser visual interaction, mobile/native packaging, Docker runtime, accessibility audit, load, or production security acceptance.

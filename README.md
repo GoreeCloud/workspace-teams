@@ -7,15 +7,16 @@ GoreeCloud Workspace Teams is a personal-first collaboration platform designed f
 ## Implemented in this alpha
 
 - **Private accounts and spaces:** local first-owner bootstrap, scrypt password hashing, HttpOnly session cookies, personal/family/community/team spaces, role checks and local SQLite data.
-- **Invitations and membership:** one-use invitations, account creation through invites, existing-user invitation acceptance, a member directory, owner-managed removal and immediate revocation of active message streams for removed members.
+- **Invitations and membership:** one-use, owner-revocable invitations, account creation through invites, existing-user invitation acceptance, a member directory, owner-managed removal and immediate revocation of active message streams for removed members.
 - **Channels and real-time chat:** channel history, Server-Sent Events, message editing/deleting by authors or space owners, basic reply references, input validation and live changes.
 - **Find your work:** permission-filtered, case-insensitive substring search of messages, tasks and notes in spaces you can access.
+- **Private files:** upload, list, download and delete small space-owned files; downloads force attachment disposition and every request enforces space membership.
 - **Tasks and shared notes:** create, update, delete and read personal or shared items within authorized spaces.
-- **Web client:** responsive GoreeCloud UI-informed alpha layouts for messaging, tasks, notes, search and members; safe text-only user content and keyboard focus.
-- **Backups:** a consistent, integrity-checked SQLite snapshot command that refuses to overwrite an existing destination.
+- **Web client:** responsive GoreeCloud UI-informed alpha layouts for messaging, tasks, notes, search, members and files; safe text-only user content and keyboard focus.
+- **Backups:** an integrity-checked SQLite snapshot plus attachment sidecar that refuses to overwrite existing destinations.
 - **Quality gates:** no external JavaScript dependencies/CDN, API authorization regression tests and GitHub Actions checks.
 
-Not implemented: voice/video/screen sharing, direct-message UI, file uploads, rich editor, full forum/thread system, reactions, E2EE, enterprise identity, calendar, notification service, federated indexed search, automated encrypted backup, PostgreSQL, production security certification, native apps and offline sync. See the [28-area capability ledger](docs/CAPABILITIES.md) for precise target-vs-delivered distinctions.
+Not implemented: voice/video/screen sharing, direct-message UI, large files and previews, rich editor, full forum/thread system, reactions, E2EE, enterprise identity, calendar, notification service, federated indexed search, automated encrypted backup, PostgreSQL, production security certification, native apps and offline sync. See the [28-area capability ledger](docs/CAPABILITIES.md) for precise target-vs-delivered distinctions.
 
 ## Start locally
 
