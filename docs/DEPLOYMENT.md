@@ -28,7 +28,13 @@ For owner-managed remote access, terminate TLS at an audited reverse proxy. Poin
 
 ## Recovery and upgrade guidance
 
-**Do not rely on a raw copy of an active SQLite database while WAL is active.** For a consistent manual snapshot in this alpha, stop application writes and gracefully stop the app before copying the `data/` directory; validate the resulting copy by starting an isolated test instance and checking its data. A verified online backup and restore CLI has not been implemented. Encryption/retention/restore drills and future PostgreSQL migration require additional work.
+**Do not copy an active WAL-mode SQLite database as a backup.** A tested snapshot command is now available:
+
+```sh
+npm run backup -- --db ./data/workspace.sqlite --output ./backups/workspace-2026-11-03.sqlite
+```
+
+It uses SQLite's online backup API, verifies database integrity, refuses overwrite and writes the final file with restrictive permissions. Backups are **not encrypted**, scheduled or restore-drill certified. Keep them in protected storage. The provided container image does not include the scripts directory; run maintenance with a compatible trusted Node runtime and authorized filesystem access. Restore only to an isolated disposable test instance before considering any live replacement. Automated upgrades and recovery remain pending.
 
 Changes to `src/server.mjs` schema require compatible, versioned migrations before upgrades are supported. Do not overwrite unknown preexisting data or promote this alpha to a production release.
 
