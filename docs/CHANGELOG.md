@@ -1,5 +1,17 @@
 # Development History
 
+## 2026-11-03 — Private files and attachment recovery increment
+
+**Status:** local implementation and tests; remote CI and visual review require independent verification.
+
+- Added owner-hosted per-space binary attachments with strict size, storage and filename bounds.
+- Protected list/upload/download/delete with space membership, uploader/owner deletion controls, download-only content disposition and SHA-256 integrity checks.
+- Added file navigation, upload form and file collection to web client.
+- Extended online SQLite snapshot backup to include verified attachment sidecar and fail closed for missing/corrupt attached files.
+- Added tests for cross-space privacy, origin controls, oversized requests, deletion rights, revocation and backup completeness.
+
+**Remaining gaps:** malware scanning, attachment previews, encryption, production recovery drills, concurrent stress testing, full browser acceptance.
+
 ## 2026-11-03 — Alpha foundation follow-up
 
 **Status:** implementation and local tests; repository CI and web-client visual acceptance must be checked separately.
