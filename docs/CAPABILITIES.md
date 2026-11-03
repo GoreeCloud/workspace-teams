@@ -32,7 +32,7 @@ This document organizes all **28 capability areas** from the founder's supplied 
 | 22 | Bots, applications, integrations | Planned | — |
 | 23 | Developer APIs and extensibility | Partial | Versionless internal JSON API; no supported third-party SDK |
 | 24 | Security, identity, privacy | Partial | scrypt, sessions, same-origin writes, membership enforcement, CSP |
-| 25 | Data governance and administration | Partial | Owner-permitted channel creation, invitations, membership removal and limited JSON export; no governance suite |
+| 25 | Data governance and administration | Partial | Owner-permitted channel creation, invitations, membership removal, scoped JSON exports with optional verified file bytes, and offline verification; safe import and governance suite pending |
 | 26 | GoreeCloud UI and accessibility | Partial | Semantic tokens, responsive UI, keyboard/focus/reduced-motion basics |
 | 27 | Cross-platform and offline | Partial | Responsive web; browser offline and native clients pending |
 | 28 | Backup, recovery, migration, reliability | Partial | Integrity-checked SQLite plus attachments; optional encrypted archive, isolated restore, one-shot scheduler; no deployed recovery automation |
@@ -147,7 +147,7 @@ Target: Linux/Windows/macOS desktop, Android/iOS, PWA, tablet and browser client
 
 ## 28. Backup, recovery, migration and reliability
 
-Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Unencrypted snapshots remain supported; optional authenticated encrypted archives and isolated decrypt/restore are implemented with automated tampering, wrong-key and attachment tests. A one-shot encrypted backup command and optional systemd examples exist but are not activated. Independent key recovery, offsite replication, cross-version migration and production disaster-recovery acceptance are pending.
+Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Unencrypted snapshots remain supported; optional authenticated encrypted archives and isolated decrypt/restore are implemented with automated tampering, wrong-key and attachment tests. A one-shot encrypted backup command and optional systemd examples exist but are not activated. Owner-scoped JSON v1 metadata and bounded v2 attachment-inclusive exports plus read-only offline verification are available; data import is not. Independent key recovery, offsite replication, cross-version migration and production disaster-recovery acceptance are pending.
 
 ## Product structure and implementation order
 
