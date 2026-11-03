@@ -1,0 +1,24 @@
+# Example only. Review paths, system account and permissions before installing.
+[Unit]
+Description=GoreeCloud Workspace Teams verified encrypted backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=workspace-teams
+Group=workspace-teams
+EnvironmentFile=/etc/goreecloud/workspace-teams-backup.env
+ExecStart=/usr/bin/node /opt/goreecloud/workspace-teams/scripts/scheduled-backup.mjs --db ${DATA_PATH} --output-dir ${OUTPUT_DIR} --passphrase-file ${PASSPHRASE_FILE}
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+ReadWritePaths=/var/backups/goreecloud/workspace-teams

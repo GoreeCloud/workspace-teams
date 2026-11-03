@@ -18,6 +18,11 @@ GoreeCloud Workspace Teams is a personal-first collaboration platform designed f
 
 Not implemented: voice/video/screen sharing, direct-message UI, large files and previews, rich editor, full forum/thread system, reactions, E2EE, enterprise identity, calendar, notification service, federated indexed search, automated encrypted backup, PostgreSQL, production security certification, native apps and offline sync. See the [28-area capability ledger](docs/CAPABILITIES.md) for precise target-vs-delivered distinctions.
 
+
+## Optional encrypted backup scheduling
+
+A one-shot encrypted backup wrapper and example systemd timer are available for host administrators. They do **not** activate a schedule, rotate/delete existing archives, or configure production backups. See [Encrypted backup scheduling](docs/BACKUP_SCHEDULING.md) for setup, locking, private key storage, and isolated recovery checks.
+
 ## Start locally
 
 Requires **Node.js 22.16+**. The built-in `node:sqlite` module remains experimental in Node 22.
