@@ -30,3 +30,11 @@
 ## 2026-11-03 — Original working alpha
 
 - Local bootstrap and invited accounts, SQLite spaces/channels, SSE messages, tasks, notes, browser shell, Compose preview, CI and 28-area capability ledger.
+
+## 2026-11-03 — Invitation governance and file UI integration (development)
+
+- Added additive `invites.revoked_at` migration, owner-only invitation listing and permanent revocation of unused invitation links. Only SHA-256 token identifiers are returned from list calls.
+- Added member-screen invitation management, preserving secret-bearing invitation links only at creation time.
+- Added regression tests for token non-disclosure, revoked registration/acceptance, role enforcement, and replay prevention.
+- Completed the previously local file management UI and attachment recovery tests; browser acceptance is still blocked by a managed browser policy.
+- The capability ledger remains a target specification, not a verified full feature parity claim.

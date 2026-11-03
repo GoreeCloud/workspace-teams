@@ -23,7 +23,7 @@ This document organizes all **28 capability areas** from the founder's supplied 
 | 13 | Friends, contacts, social interaction | Planned | — |
 | 14 | Community onboarding and management | Partial | Private single-use invitations |
 | 15 | Moderation and trust controls | Partial | Owner-driven member removal, access checks; moderation suite pending |
-| 16 | File sharing and storage | Planned | — |
+| 16 | File sharing and storage | Partial | Membership-scoped local file uploads, list/download/delete, 2 MiB per file and 32 MiB per space; no image preview, versioning, external storage or virus scanner |
 | 17 | Collaborative documents, notes, knowledge bases | Partial | Shared plain-text notes only |
 | 18 | Tasks and project management | Partial | Shared checklist-style tasks only |
 | 19 | Search, navigation, discovery | Partial | Scoped substring search of accessible messages, notes, tasks; advanced search pending |
@@ -35,7 +35,7 @@ This document organizes all **28 capability areas** from the founder's supplied 
 | 25 | Data governance and administration | Partial | Owner-permitted channel creation, invitations, membership removal; no governance suite |
 | 26 | GoreeCloud UI and accessibility | Partial | Semantic tokens, responsive UI, keyboard/focus/reduced-motion basics |
 | 27 | Cross-platform and offline | Partial | Responsive web; browser offline and native clients pending |
-| 28 | Backup, recovery, migration, reliability | Planned | Consistency-checked on-demand SQLite snapshot CLI; automated encrypted backups pending |
+| 28 | Backup, recovery, migration, reliability | Partial | Consistency-checked on-demand SQLite snapshot and verified attachment sidecar; encryption/restore automation pending |
 
 ## 1. Self-hosting and deployment
 
@@ -51,7 +51,7 @@ Target: local signup, administrator creation, invitation-only signup, strong pas
 
 ## 4. Spaces and workspace management
 
-Target: instance → spaces → optional categories → channels → threads. Space creation, roles, ownership, directories, public/private types, member invitation/approval/guest policy, custom branding, templates, configurable navigation, favorites, exports, archive and restore. **Current:** space creation, owner/member roles, 24-hour one-time invitations, existing-user acceptance, member listing and owner removal; no category/archive interfaces.
+Target: instance → spaces → optional categories → channels → threads. Space creation, roles, ownership, directories, public/private types, member invitation/approval/guest policy, custom branding, templates, configurable navigation, favorites, exports, archive and restore. **Current:** space creation, owner/member roles, 24-hour one-time invitations, owner listing/revocation, existing-user acceptance, member listing and owner removal; no category/archive interfaces.
 
 ## 5. Channels and discussion organization
 
@@ -99,7 +99,7 @@ Target: granular roles and channel permissions, verification, keyword/spam/link 
 
 ## 16. Files and storage
 
-Target: images, video, audio, documents, code, archives and other attachments; preview, folders, metadata, tags, permissions, expiring links, revisions, quotas, WebDAV, local and S3-compatible storage, secure transfers and import/export. **Current:** planned.
+Target: images, video, audio, documents, code, archives and other attachments; preview, folders, metadata, tags, permissions, expiring links, revisions, quotas, WebDAV, local and S3-compatible storage, secure transfers and import/export. **Current:** private space file uploads, list/download/delete, 2 MiB single-file/32 MiB space limits, SHA-256 integrity checks and attachment-only downloads; other features pending.
 
 ## 17. Documents, notes and knowledge bases
 
@@ -147,7 +147,7 @@ Target: Linux/Windows/macOS desktop, Android/iOS, PWA, tablet and browser client
 
 ## 28. Backup, recovery, migration and reliability
 
-Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified non-overwriting snapshot while the server is running. Backups are **not encrypted**, scheduled or restore-drill certified, and production recovery is pending.
+Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Backups are **not encrypted**, scheduled or restore-drill certified, and production recovery is pending.
 
 ## Product structure and implementation order
 

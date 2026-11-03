@@ -14,3 +14,10 @@
 .search-card{border:1px solid var(--gc-outline);background:var(--gc-surface);border-radius:var(--gc-radius-m);padding:17px 20px;margin:10px 0;overflow-wrap:anywhere}
 .search-card strong,.search-card small{display:block}.search-card strong{margin-top:6px}.search-card p{margin:8px 0 0;color:var(--gc-text-soft)}
 @media(hover:none){.message-actions{opacity:1}}
+
+/* Files — permission-scoped, downloadable as attachments only. */
+.file-list{max-width:820px;margin-top:24px;display:grid;gap:12px}
+.file-row{display:flex;gap:12px;align-items:center;padding:18px;border:1px solid var(--gc-outline);background:var(--gc-surface);border-radius:var(--gc-radius-m)}
+.file-meta{flex:1;min-width:0;overflow-wrap:anywhere}.file-meta strong,.file-meta small{display:block}.file-meta small{margin-top:5px}
+.file-row a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+@media(max-width:540px){.file-row{flex-wrap:wrap}.file-meta{flex-basis:100%}}

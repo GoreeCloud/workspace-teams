@@ -166,3 +166,75 @@ test('consistent online backup preserves accounts, refuses overwrite, and verifi
   try {assert.equal(restored.prepare('SELECT username FROM users LIMIT 1').get().username,'backupowner');}
   finally{restored.close();}
 });
+
+
+test('private file upload, download and removal are authorized and integrity-protected', async t=>{
+  const {request,base}=await fixture(t);
+  const owner=await request('/bootstrap',{method:'POST',data:{username:'owner',password:'correct-horse-battery'}});
+  const space=(await request('/spaces',{cookie:owner.cookie})).data.spaces[0];
+  const invite=(await request(`/spaces/${space.id}/invites`,{cookie:owner.cookie,method:'POST',data:{}})).data.invite;
+  const friend=await request('/register',{method:'POST',data:{username:'friend',password:'another-strong-password',invite}});
+  const outsiderSpace=(await request('/spaces',{cookie:friend.cookie})).data.spaces.find(x=>x.id!==space.id);
+  const filename='holiday photo <2026>.txt';
+  const route=`/api/spaces/${space.id}/files?name=${encodeURIComponent(filename)}`;
+  const upload=async (cookie,name,payload,origin='http://localhost:3000')=>fetch(base+`/api/spaces/${space.id}/files?name=${encodeURIComponent(name)}`,{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/octet-stream'},body:payload});
+  assert.equal((await upload(owner.cookie,filename,Buffer.from('abc'))).status,201);
+  const files=(await request(`/spaces/${space.id}/files`,{cookie:owner.cookie})).data.files;
+  assert.equal(files.length,1); assert.equal(files[0].name,filename);assert.equal(files[0].size,3);
+  const fileId=files[0].id;
+  assert.equal((await request(`/spaces/${space.id}/files`)).status,401);
+  const downloaded=await fetch(base+`/api/files/${fileId}/download`,{headers:{Cookie:friend.cookie}});
+  assert.equal(downloaded.status,200);assert.equal(downloaded.headers.get('content-type'),'application/octet-stream');
+  assert.match(downloaded.headers.get('content-disposition'),/^attachment;/);
+  assert.equal(await downloaded.text(),'abc');
+  assert.equal((await upload(owner.cookie,'../escape',Buffer.from('x'))).status,400);
+  assert.equal((await upload(owner.cookie,'x',Buffer.alloc(2*1024*1024+1))).status,413);
+  assert.equal((await upload(owner.cookie,'x',Buffer.from('x'),'https://cross-origin.invalid')).status,403);
+  const outsider=(await request(`/spaces/${outsiderSpace.id}/files`,{cookie:owner.cookie}));assert.equal(outsider.status,404);
+  assert.equal((await request(`/files/${fileId}`,{method:'DELETE',cookie:friend.cookie})).status,403);
+  assert.equal((await request(`/files/${fileId}`,{method:'DELETE',cookie:owner.cookie})).status,200);
+  assert.equal((await fetch(base+`/api/files/${fileId}/download`,{headers:{Cookie:owner.cookie}})).status,404);
+});
+
+test('membership removal revokes private file access immediately',async t=>{
+  const {request,base}=await fixture(t);
+  const owner=await request('/bootstrap',{method:'POST',data:{username:'owner',password:'correct-horse-battery'}});
+  const space=(await request('/spaces',{cookie:owner.cookie})).data.spaces[0];
+  const invite=(await request(`/spaces/${space.id}/invites`,{cookie:owner.cookie,method:'POST',data:{}})).data.invite;
+  const friend=await request('/register',{method:'POST',data:{username:'friend',password:'another-strong-password',invite}});
+  const uploaded=await fetch(base+`/api/spaces/${space.id}/files?name=personal.txt`,{method:'POST',headers:{Cookie:owner.cookie,Origin:'http://localhost:3000','Content-Type':'application/octet-stream'},body:'secret'});
+  const file=(await uploaded.json()).file;assert.equal(uploaded.status,201);
+  assert.equal((await fetch(base+`/api/files/${file.id}/download`,{headers:{Cookie:friend.cookie}})).status,200);
+  const friendId=(await request(`/spaces/${space.id}/members`,{cookie:owner.cookie})).data.members.find(m=>m.username==='friend').id;
+  assert.equal((await request(`/spaces/${space.id}/members/${friendId}`,{cookie:owner.cookie,method:'DELETE'})).status,200);
+  assert.equal((await fetch(base+`/api/files/${file.id}/download`,{headers:{Cookie:friend.cookie}})).status,404);
+  assert.equal((await request(`/spaces/${space.id}/files`,{cookie:friend.cookie})).status,404);
+  assert.equal((await request(`/files/${file.id}`,{method:'DELETE',cookie:friend.cookie})).status,404);
+});
+
+test('verified backup includes private attachment bytes and refuses orphaned data', async t=>{
+  const {backupDatabase}=await import('../scripts/backup.mjs');
+  const dir=mkdtempSync(join(tmpdir(),'goree-files-backup-'));
+  const dbPath=join(dir,'active.sqlite'),target=join(dir,'archive.sqlite');
+  const app=createApplication({dbPath,origin:'http://localhost:3000'});
+  app.server.listen(0,'127.0.0.1');await once(app.server,'listening');
+  t.after(async()=>{await new Promise(resolve=>app.server.close(resolve));app.close();rmSync(dir,{recursive:true,force:true});});
+  const base=`http://127.0.0.1:${app.server.address().port}`;
+  const bootstrap=await fetch(base+'/api/bootstrap',{method:'POST',headers:{Origin:'http://localhost:3000','Content-Type':'application/json'},body:JSON.stringify({username:'owner',password:'correct-horse-battery'})});
+  const cookie=bootstrap.headers.get('set-cookie')?.split(';')[0];
+  const spaces=await fetch(base+'/api/spaces',{headers:{Cookie:cookie}});
+  const space=(await spaces.json()).spaces[0];
+  const fileContents='backup attachment';
+  const upload=await fetch(base+`/api/spaces/${space.id}/files?name=archive.txt`,{method:'POST',headers:{Cookie:cookie,Origin:'http://localhost:3000','Content-Type':'application/octet-stream'},body:fileContents});
+  assert.equal(upload.status,201);const id=(await upload.json()).file.id;
+  const result=await backupDatabase({dbPath,outputPath:target});
+  assert.equal(result.files,1);
+  const {readFileSync,existsSync,unlinkSync}=await import('node:fs');
+  assert.equal(readFileSync(`${target}.files/${id}`,'utf8'),fileContents);
+  assert.equal(existsSync(`${target}.files/${id}`),true);
+  await assert.rejects(backupDatabase({dbPath,outputPath:target}),/already exists/);
+  unlinkSync(join(`${dbPath}.files`,id));
+  await assert.rejects(backupDatabase({dbPath,outputPath:join(dir,'broken.sqlite')}));
+  assert.equal(existsSync(join(dir,'broken.sqlite')),false);
+  assert.equal(existsSync(join(dir,'broken.sqlite.files')),false);
+});
