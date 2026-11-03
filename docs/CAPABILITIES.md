@@ -13,29 +13,29 @@ This document organizes all **28 capability areas** from the founder's supplied 
 | 3 | Accounts, authentication, profiles | Partial | Bootstrap, local password authentication, cookie sessions, display names |
 | 4 | Spaces, servers, workspace management | Partial | Space creation, membership and invitations |
 | 5 | Channels and discussion organization | Partial | Text channels, owner creation |
-| 6 | Messaging and conversations | Partial | Persistent channel text messages, SSE live updates |
+| 6 | Messaging and conversations | Partial | Persistent text, edit/delete, basic threaded replies, SSE live updates |
 | 7 | Rich text and interactive messages | Planned | Plain text only; untrusted text is displayed without HTML execution |
-| 8 | Threads, forums, discussion boards | Planned | — |
+| 8 | Threads, forums, discussion boards | Partial | Reply-to-message references, not full forum/thread UI |
 | 9 | Voice communication | Planned | — |
 | 10 | Video calling and screen sharing | Planned | — |
 | 11 | Live events, stages, presentations | Planned | — |
 | 12 | Calendars, scheduling, reminders | Planned | — |
 | 13 | Friends, contacts, social interaction | Planned | — |
 | 14 | Community onboarding and management | Partial | Private single-use invitations |
-| 15 | Moderation and trust controls | Planned | Owner/member access checks exist; moderation suite pending |
+| 15 | Moderation and trust controls | Partial | Owner-driven member removal, access checks; moderation suite pending |
 | 16 | File sharing and storage | Planned | — |
 | 17 | Collaborative documents, notes, knowledge bases | Partial | Shared plain-text notes only |
 | 18 | Tasks and project management | Partial | Shared checklist-style tasks only |
-| 19 | Search, navigation, discovery | Partial | Space/channel navigation; search not implemented |
+| 19 | Search, navigation, discovery | Partial | Scoped substring search of accessible messages, notes, tasks; advanced search pending |
 | 20 | Notifications and attention management | Partial | Live message updates inside open channel only |
 | 21 | Workflow automation | Planned | — |
 | 22 | Bots, applications, integrations | Planned | — |
 | 23 | Developer APIs and extensibility | Partial | Versionless internal JSON API; no supported third-party SDK |
 | 24 | Security, identity, privacy | Partial | scrypt, sessions, same-origin writes, membership enforcement, CSP |
-| 25 | Data governance and administration | Partial | Owner-permitted channel creation and invitations; no governance suite |
+| 25 | Data governance and administration | Partial | Owner-permitted channel creation, invitations, membership removal; no governance suite |
 | 26 | GoreeCloud UI and accessibility | Partial | Semantic tokens, responsive UI, keyboard/focus/reduced-motion basics |
 | 27 | Cross-platform and offline | Partial | Responsive web; browser offline and native clients pending |
-| 28 | Backup, recovery, migration, reliability | Planned | Manual database filesystem backup guidance only |
+| 28 | Backup, recovery, migration, reliability | Planned | Consistency-checked on-demand SQLite snapshot CLI; automated encrypted backups pending |
 
 ## 1. Self-hosting and deployment
 
@@ -43,7 +43,7 @@ Target: fully self-hosted web, messaging, voice/video media, storage, database, 
 
 ## 2. Personal, family, community and organization modes
 
-Target: single-user/private spaces with journals, notes, projects, calendars, reminders and automations; family/friends spaces with group communication, shared media, responsibilities and gaming; community spaces with public/private channels, forums, rules, onboarding and events; organizational spaces with departments, external guests, approvals, projects and governance. A single account must work without teams. **Current:** personal/family/community/team space types with shared messages, tasks and notes; richer modes are planned.
+Target: single-user/private spaces with journals, notes, projects, calendars, reminders and automations; family/friends spaces with group communication, shared media, responsibilities and gaming; community spaces with public/private channels, forums, rules, onboarding and events; organizational spaces with departments, external guests, approvals, projects and governance. A single account must work without teams. **Current:** personal/family/community/team space types with shared messages, tasks and notes; member removal and reusing invitations for existing users are supported; richer modes are planned.
 
 ## 3. Accounts, authentication, profiles and presence
 
@@ -51,7 +51,7 @@ Target: local signup, administrator creation, invitation-only signup, strong pas
 
 ## 4. Spaces and workspace management
 
-Target: instance → spaces → optional categories → channels → threads. Space creation, roles, ownership, directories, public/private types, member invitation/approval/guest policy, custom branding, templates, configurable navigation, favorites, exports, archive and restore. **Current:** space creation, owner/member roles, 24-hour one-time invitations; no category/thread/archive interfaces.
+Target: instance → spaces → optional categories → channels → threads. Space creation, roles, ownership, directories, public/private types, member invitation/approval/guest policy, custom branding, templates, configurable navigation, favorites, exports, archive and restore. **Current:** space creation, owner/member roles, 24-hour one-time invitations, existing-user acceptance, member listing and owner removal; no category/archive interfaces.
 
 ## 5. Channels and discussion organization
 
@@ -59,7 +59,7 @@ Target: public/private/restricted text, voice, video, announcement, forum, stage
 
 ## 6. Messaging and conversations
 
-Target: one-to-one and group direct messages, public/private conversations, threaded replies, persistent history, edit/delete, pin/save/bookmark/forward/quote, mentions, reactions, custom emoji/GIF/stickers, polls, scheduled messages, drafts, read/unread, receipts, typing, audio/video clips, voice messages, text-to-speech, configurable retention and optional E2EE. **Current:** plain-text channel messages, persistent history and live SSE updates; all other messaging facilities planned.
+Target: one-to-one and group direct messages, public/private conversations, threaded replies, persistent history, edit/delete, pin/save/bookmark/forward/quote, mentions, reactions, custom emoji/GIF/stickers, polls, scheduled messages, drafts, read/unread, receipts, typing, audio/video clips, voice messages, text-to-speech, configurable retention and optional E2EE. **Current:** plain-text channel messages, persistent history, live SSE updates, edit/delete with author/owner checks, and reply-to-message references; reactions, direct messages and the rest remain planned.
 
 ## 7. Rich text and interactive messages
 
@@ -67,7 +67,7 @@ Target: Markdown, rich text, code blocks with syntax highlighting, headings, che
 
 ## 8. Threads, forums and discussion boards
 
-Target: private/public threads, following, notifications, locking, archiving, forum posts/categories/tags, filtering/sorting, moderation and answered/resolved state. **Current:** planned.
+Target: private/public threads, following, notifications, locking, archiving, forum posts/categories/tags, filtering/sorting, moderation and answered/resolved state. **Current:** basic reply references exist; dedicated thread browsing, archiving, forums and moderation are planned.
 
 ## 9. Voice communication
 
@@ -95,7 +95,7 @@ Target: public/private membership, welcome guides, rules acceptance, questionnai
 
 ## 15. Moderation and trust
 
-Target: granular roles and channel permissions, verification, keyword/spam/link filtering, rate limiting and slow mode, anti-raid controls, reviews/reports/appeals, timeouts, kicks, bans, alert channels and audit history. **Current:** basic space-role enforcement and write rate limits, not a moderation subsystem.
+Target: granular roles and channel permissions, verification, keyword/spam/link filtering, rate limiting and slow mode, anti-raid controls, reviews/reports/appeals, timeouts, kicks, bans, alert channels and audit history. **Current:** basic space-role enforcement, owner-directed membership removal with immediate SSE closure, and write rate limits; comprehensive moderation is pending.
 
 ## 16. Files and storage
 
@@ -111,7 +111,7 @@ Target: personal/family/team tasks, subtasks, due dates, priorities, custom fiel
 
 ## 19. Search and discovery
 
-Target: full-text permission-aware global and scoped search for messages, people, channels, spaces, documents, files, tasks, events, forums, saved searches and advanced filters. **Current:** space/channel navigation only.
+Target: full-text permission-aware global and scoped search for messages, people, channels, spaces, documents, files, tasks, events, forums, saved searches and advanced filters. **Current:** space/channel navigation and case-insensitive, permission-filtered substring search across messages, notes and tasks within a space; no true indexed full-text search, advanced filters or federated search.
 
 ## 20. Notifications and attention
 
@@ -135,7 +135,7 @@ Target: secure authentication, MFA, passkeys, federated identity optionality, RB
 
 ## 25. Administration and data governance
 
-Target: instance and delegated admin roles, group provisioning, space/channel/app/workflow management, policy enforcement, retention, holds, authorized exports, DLP, emergency controls, recovery and audit records. For personal users keep settings simple and optional. **Current:** small owner/member scope only.
+Target: instance and delegated admin roles, group provisioning, space/channel/app/workflow management, policy enforcement, retention, holds, authorized exports, DLP, emergency controls, recovery and audit records. For personal users keep settings simple and optional. **Current:** owner/member permissions, owner-controlled invitations, member listing and removal; comprehensive governance is pending.
 
 ## 26. GoreeCloud UI and accessibility
 
@@ -147,7 +147,7 @@ Target: Linux/Windows/macOS desktop, Android/iOS, PWA, tablet and browser client
 
 ## 28. Backup, recovery, migration and reliability
 
-Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** database persistence and health endpoint only; backup tooling is planned. A file copy of an active SQLite WAL database is not a verified backup.
+Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified non-overwriting snapshot while the server is running. Backups are **not encrypted**, scheduled or restore-drill certified, and production recovery is pending.
 
 ## Product structure and implementation order
 
