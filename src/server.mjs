@@ -38,6 +38,8 @@ function init(db) {
   if (!messageColumns.has('updated_at')) db.exec('ALTER TABLE messages ADD COLUMN updated_at TEXT');
   if (!messageColumns.has('parent_id')) db.exec('ALTER TABLE messages ADD COLUMN parent_id TEXT REFERENCES messages(id) ON DELETE SET NULL');
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_id)');
+  const inviteColumns = new Set(db.prepare('PRAGMA table_info(invites)').all().map(row => row.name));
+  if (!inviteColumns.has('revoked_at')) db.exec('ALTER TABLE invites ADD COLUMN revoked_at INTEGER');
 }
 
 export function createApplication({dbPath = process.env.DATA_PATH || './data/workspace.sqlite', origin = process.env.APP_ORIGIN || 'http://localhost:3000', filesPath = process.env.FILES_PATH || null} = {}) {
@@ -190,12 +192,12 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         if(!limit(ip,'login',12,15*60_000))return error(res,429,'Too many attempts');
         const data=await body(req), name=data.username?.trim(), display=data.displayName?.trim()||name;
         if(!/^[a-zA-Z0-9_-]{3,32}$/.test(name||'')||!validText(display,80)||!validText(data.password,256,12)||typeof data.invite!=='string')return error(res,400,'Valid invitation, username, display name, and password required');
-        const invitation=get('SELECT * FROM invites WHERE token_hash=? AND used_by IS NULL AND expires_at>?',digest(data.invite),Date.now());
+        const invitation=get('SELECT * FROM invites WHERE token_hash=? AND used_by IS NULL AND revoked_at IS NULL AND expires_at>?',digest(data.invite),Date.now());
         if(!invitation)return error(res,400,'Invitation invalid or expired');
         const id=randomUUID(),salt=randomBytes(16).toString('hex');
         db.exec('BEGIN IMMEDIATE');
         try {
-          const active=get('SELECT * FROM invites WHERE token_hash=? AND used_by IS NULL AND expires_at>?',digest(data.invite),Date.now());
+          const active=get('SELECT * FROM invites WHERE token_hash=? AND used_by IS NULL AND revoked_at IS NULL AND expires_at>?',digest(data.invite),Date.now());
           if(!active){db.exec('ROLLBACK');return error(res,409,'Invitation has already been used');}
           run('INSERT INTO users(id,username,display_name,salt,password_hash,created_at) VALUES(?,?,?,?,?,?)',id,name,display,salt,passwordHash(data.password,salt),now());
           createSpace(id,'My Space','personal');
@@ -228,7 +230,7 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         const hash=digest(data.invite);
         db.exec('BEGIN IMMEDIATE');
         try {
-          const invite=get('SELECT space_id AS spaceId FROM invites WHERE token_hash=? AND used_by IS NULL AND expires_at>?',hash,Date.now());
+          const invite=get('SELECT space_id AS spaceId FROM invites WHERE token_hash=? AND used_by IS NULL AND revoked_at IS NULL AND expires_at>?',hash,Date.now());
           if(!invite){db.exec('ROLLBACK');return error(res,400,'Invitation invalid or expired');}
           if(membership(invite.spaceId,user.id)){db.exec('ROLLBACK');return error(res,409,'Already a member');}
           run("INSERT INTO memberships(space_id,user_id,role) VALUES(?,?,'member')",invite.spaceId,user.id);
@@ -319,11 +321,23 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
             const id=randomUUID();run('INSERT INTO notes(id,space_id,author_id,title,body,updated_at) VALUES(?,?,?,?,?,?)',id,spaceId,user.id,data.title.trim(),data.body,now());return send(res,201,{id});
           }
         }
-        if(section==='invites' && method==='POST') {
+        if(section==='invites') {
           if(role!=='owner')return error(res,403,'Owner access required');
-          const invite=token();run('INSERT INTO invites(token_hash,space_id,created_by,expires_at) VALUES(?,?,?,?)',digest(invite),spaceId,user.id,Date.now()+24*3600_000);
-          return send(res,201,{invite,expiresInHours:24});
+          if(method==='GET')return send(res,200,{invites:all('SELECT token_hash AS id,expires_at AS expiresAt FROM invites WHERE space_id=? AND used_by IS NULL AND revoked_at IS NULL AND expires_at>? ORDER BY expires_at DESC LIMIT 100',spaceId,Date.now())});
+          if(method==='POST') {
+            if(!limit(`${ip}:${user.id}`,'invitation',20,60_000))return error(res,429,'Invitation rate limit');
+            const invite=token();run('INSERT INTO invites(token_hash,space_id,created_by,expires_at) VALUES(?,?,?,?)',digest(invite),spaceId,user.id,Date.now()+24*3600_000);
+            return send(res,201,{invite,expiresInHours:24});
+          }
         }
+      }
+      const inviteRoute=path.match(/^\/api\/spaces\/([0-9a-f-]{36})\/invites\/([0-9a-f]{64})$/);
+      if(inviteRoute && method==='DELETE') {
+        const [,spaceId,inviteId]=inviteRoute;
+        if(membership(spaceId,user.id)!=='owner')return error(res,403,'Owner access required');
+        const result=run('UPDATE invites SET revoked_at=? WHERE token_hash=? AND space_id=? AND used_by IS NULL AND revoked_at IS NULL',Date.now(),inviteId,spaceId);
+        if(!result.changes)return error(res,404,'Active invitation not found');
+        return send(res,200,{ok:true});
       }
       const memberRoute=path.match(/^\/api\/spaces\/([0-9a-f-]{36})\/members\/([0-9a-f-]{36})$/);
       if(memberRoute && method==='DELETE') {
