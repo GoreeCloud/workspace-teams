@@ -11,6 +11,7 @@ GoreeCloud Workspace Teams is a personal-first collaboration platform designed f
 - **Channels and real-time chat:** channel history, Server-Sent Events, message editing/deleting by authors or space owners, basic reply references, input validation and live changes.
 - **Find your work:** permission-filtered, case-insensitive substring search of messages, tasks and notes in spaces you can access.
 - **Private files:** upload, list, download and delete small space-owned files; downloads force attachment disposition and every request enforces space membership.
+- **Space portability:** owners can download a scoped JSON export of conversations, notes, tasks, channels, members and attachment metadata (not file bytes). See [space export](docs/EXPORT.md).
 - **Tasks and shared notes:** create, update, delete and read personal or shared items within authorized spaces.
 - **Web client:** responsive GoreeCloud UI-informed alpha layouts for messaging, tasks, notes, search, members and files; safe text-only user content and keyboard focus.
 - **Backups:** an integrity-checked SQLite snapshot plus attachment sidecar that refuses to overwrite existing destinations.

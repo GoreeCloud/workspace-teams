@@ -23,3 +23,5 @@
 @media(max-width:540px){.file-row{flex-wrap:wrap}.file-meta{flex-basis:100%}}
 
 #account-dialog .small-outline{margin:8px 0 20px}#account-password-form{padding-top:12px;border-top:1px solid var(--gc-outline)}#account-password-form button[type=submit]{margin-top:10px}#account-session-count{color:var(--gc-brand);font-weight:650}
+
+.space-export{max-width:820px;margin-top:28px;padding:22px;border:1px solid var(--gc-outline);background:var(--gc-surface);border-radius:var(--gc-radius-m)}.space-export h3{margin:0 0 9px}.space-export p{max-width:700px;line-height:1.6}.space-export a{display:inline-flex;align-items:center;text-decoration:none;margin-top:6px}.space-export a:focus-visible{outline:3px solid var(--gc-brand);outline-offset:3px}
