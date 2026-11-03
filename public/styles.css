@@ -21,3 +21,5 @@
 .file-meta{flex:1;min-width:0;overflow-wrap:anywhere}.file-meta strong,.file-meta small{display:block}.file-meta small{margin-top:5px}
 .file-row a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 @media(max-width:540px){.file-row{flex-wrap:wrap}.file-meta{flex-basis:100%}}
+
+#account-dialog .small-outline{margin:8px 0 20px}#account-password-form{padding-top:12px;border-top:1px solid var(--gc-outline)}#account-password-form button[type=submit]{margin-top:10px}#account-session-count{color:var(--gc-brand);font-weight:650}

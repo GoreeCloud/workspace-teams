@@ -60,3 +60,12 @@ Future compatibility gates include migration version tracking, transaction-level
 `files` stores per-space metadata, uploader identity, size, timestamp and SHA-256 digest. Binary bytes live in an owner-controlled local directory, by default `<DATA_PATH>.files`, keyed only by a random UUID. Uploaded names are metadata and are never used as filesystem paths. `FILES_PATH` optionally selects another trusted local directory. GET, upload, and delete endpoints enforce authenticated space membership; delete requires file uploader or space owner. Download responses force `Content-Disposition: attachment` and `application/octet-stream`, use `nosniff` and no-store, and verify content before sending. The feature deliberately lacks media previews, malware scanning, external storage, large file support, client-side encryption, or multipart uploads.
 
 The on-demand backup CLI snapshots SQLite first and copies only files referenced by that snapshot into `<output>.files` after matching each byte stream to SHA-256/size metadata; absent or corrupt files abort the backup. Data is not encrypted and there is no automated restore rehearsal.
+
+
+## Basic account-security APIs (alpha)
+
+- `GET /api/account/security`: authenticated active-session count with no raw tokens or digests.
+- `POST /api/account/sessions/revoke-others`: delete other session records and terminate their SSE streams.
+- `POST /api/account/password`: verify the old password; in a transaction, rotate salted credentials, delete all prior sessions and create a fresh current-browser session; terminate all prior SSE streams.
+
+These routes use the existing session cookie, strict request-Origin checks for writes, and in-process per-user/IP rate limits. GoreeCloud UI visual acceptance remains pending.

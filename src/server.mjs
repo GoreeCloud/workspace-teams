@@ -130,6 +130,10 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
       for (const client of clients) if (client.userId === userId && (!onlySessionHash || client.sessionHash === onlySessionHash)) client.res.end();
     }
   }
+  function closeOtherStreamsFor(userId, keepSessionHash) {
+    for (const clients of streams.values()) for (const client of clients)
+      if (client.userId === userId && client.sessionHash !== keepSessionHash) client.res.end();
+  }
   const messageFields = 'm.id,m.channel_id AS channelId,m.author_id AS authorId,m.body,m.created_at AS createdAt,m.updated_at AS updatedAt,m.parent_id AS parentId,u.display_name AS author';
   function messageById(id) {
     return get(`SELECT ${messageFields} FROM messages m JOIN users u ON u.id=m.author_id WHERE m.id=?`, id);
@@ -209,6 +213,39 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
       }
       const user=getUser(req);
       if(!user) return error(res,401,'Sign in required');
+      if (path==='/api/account/security' && method==='GET') {
+        const activeSessions=get('SELECT COUNT(*) AS count FROM sessions WHERE user_id=? AND expires_at>?',user.id,Date.now()).count;
+        return send(res,200,{activeSessions});
+      }
+      if (path==='/api/account/sessions/revoke-others' && method==='POST') {
+        if(!limit(ip+':'+user.id,'revoke-sessions',12,15*60_000))return error(res,429,'Too many security requests');
+        const current=sessionHash(req);
+        const revoked=run('DELETE FROM sessions WHERE user_id=? AND token_hash<>?',user.id,current).changes;
+        closeOtherStreamsFor(user.id,current);
+        return send(res,200,{ok:true,revoked});
+      }
+      if (path==='/api/account/password' && method==='POST') {
+        if(!limit(ip+':'+user.id,'password-change',6,15*60_000))return error(res,429,'Too many security requests');
+        const data=await body(req);
+        if(typeof data.currentPassword!=='string' || !validText(data.newPassword,256,12))return error(res,400,'Current password and a new password (12–256 characters) required');
+        if(data.currentPassword===data.newPassword)return error(res,400,'Choose a different new password');
+        const record=get('SELECT salt,password_hash FROM users WHERE id=?',user.id);
+        const candidate=passwordHash(data.currentPassword,record.salt);
+        if(!timingSafeEqual(Buffer.from(candidate,'hex'),Buffer.from(record.password_hash,'hex')))return error(res,403,'Current password is incorrect');
+        const salt=randomBytes(16).toString('hex'), newHash=passwordHash(data.newPassword,salt);
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          if(!get('SELECT token_hash FROM sessions WHERE token_hash=? AND user_id=? AND expires_at>?',sessionHash(req),user.id,Date.now())) {
+            db.exec('ROLLBACK');return error(res,401,'Session expired');
+          }
+          run('UPDATE users SET salt=?, password_hash=? WHERE id=?',salt,newHash,user.id);
+          run('DELETE FROM sessions WHERE user_id=?',user.id);
+          establishSession(res,user.id);
+          db.exec('COMMIT');
+        } catch(e) {db.exec('ROLLBACK');throw e;}
+        closeStreamsFor(user.id);
+        return send(res,200,{ok:true,otherSessionsRevoked:true});
+      }
       if (path==='/api/search' && method==='GET') {
         const q=searchParams.get('q')?.trim();
         if (!validText(q,100,2)) return error(res,400,'Search must be 2–100 characters');

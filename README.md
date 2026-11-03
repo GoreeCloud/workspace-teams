@@ -61,3 +61,8 @@ This checks the database and every attachment before creating `restored-test-ins
 - [Development history](docs/CHANGELOG.md)
 
 **Design:** GoreeCloud UI is the authoritative design system. Current styles are a provisional `--gc-*` implementation, not proof of full integration or formal visual acceptance. No advertising, subscriptions, telemetry or external service dependency is included in the alpha. Public source visibility does **not** establish an open-source license; repository owner licensing remains undecided.
+
+
+### Account security (alpha)
+
+Use the account avatar to inspect the active session count, sign out other sessions, or change your password. Password rotation checks the old password, stores a new salted scrypt verifier, revokes every prior cookie, and issues a fresh cookie for this browser. This is basic account hygiene, not multi-factor authentication, device auditing, or production security assurance.
