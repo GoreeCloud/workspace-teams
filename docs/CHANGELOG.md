@@ -4,12 +4,12 @@
 
 - Added optional `GCWSENC1` AES-256-GCM/scrypt single-file SQLite-plus-attachments archives, authenticated manifest and integrity checks, and fail-closed key/tamper validation.
 - Added separate-file key protection, no-overwrite restore, restricted temporary staging and end-to-end regression coverage.
-- Production security review, encrypted temporary storage, automatic scheduling, key escrow and live host recovery remain pending.
+- Production security review, encrypted temporary storage, scheduler activation, key escrow and live host recovery remain pending.
 
 
 ## 2026-11-03 — Private files and attachment recovery increment
 
-**Status:** local implementation and tests; remote CI and visual review require independent verification.
+**Status:** implementation merged to `main` via PR #3 with GitHub CI; full browser visual review remains pending.
 
 - Added owner-hosted per-space binary attachments with strict size, storage and filename bounds.
 - Protected list/upload/download/delete with space membership, uploader/owner deletion controls, download-only content disposition and SHA-256 integrity checks.
@@ -50,4 +50,4 @@
 
 - Added non-overwriting restore to a fresh directory with database, foreign-key, WAL and attachment integrity checks.
 - Added regression coverage for restored authenticated downloads, existing-target refusal and corrupted/missing attachment rejection.
-- No live VPS restore, encryption, scheduled backups or production disaster recovery completed.
+- No live VPS restore, enabled backup timer, offsite replication or production disaster-recovery acceptance. Optional encryption and scheduled-backup source were added separately in PR #6 and #7.

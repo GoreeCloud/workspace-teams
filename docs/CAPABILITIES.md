@@ -35,7 +35,7 @@ This document organizes all **28 capability areas** from the founder's supplied 
 | 25 | Data governance and administration | Partial | Owner-permitted channel creation, invitations, membership removal and limited JSON export; no governance suite |
 | 26 | GoreeCloud UI and accessibility | Partial | Semantic tokens, responsive UI, keyboard/focus/reduced-motion basics |
 | 27 | Cross-platform and offline | Partial | Responsive web; browser offline and native clients pending |
-| 28 | Backup, recovery, migration, reliability | Partial | Consistency-checked on-demand SQLite snapshot and verified attachment sidecar; encryption/restore automation pending |
+| 28 | Backup, recovery, migration, reliability | Partial | Integrity-checked SQLite plus attachments; optional encrypted archive, isolated restore, one-shot scheduler; no deployed recovery automation |
 
 ## 1. Self-hosting and deployment
 
@@ -147,7 +147,7 @@ Target: Linux/Windows/macOS desktop, Android/iOS, PWA, tablet and browser client
 
 ## 28. Backup, recovery, migration and reliability
 
-Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Unencrypted snapshots remain supported; optional authenticated encrypted archives and isolated decrypt/restore are implemented with automated tampering, wrong-key and attachment tests. Scheduling, key recovery, cross-version migration and production disaster-recovery acceptance are pending.
+Target: validated encrypted/full/incremental backups, restore drills, portable import/export, point-in-time recovery, configurable retention, migrations, rollback, health checks and operational diagnostics. **Current:** SQLite persistence, health endpoint and `npm run backup -- --output PATH` for a consistent, verified, non-overwriting SQLite snapshot with attachment sidecar. Existing files are verified by SHA-256 against database metadata. Unencrypted snapshots remain supported; optional authenticated encrypted archives and isolated decrypt/restore are implemented with automated tampering, wrong-key and attachment tests. A one-shot encrypted backup command and optional systemd examples exist but are not activated. Independent key recovery, offsite replication, cross-version migration and production disaster-recovery acceptance are pending.
 
 ## Product structure and implementation order
 
