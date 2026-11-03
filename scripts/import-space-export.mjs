@@ -41,7 +41,7 @@ function validate(data) {
   if (!item(data.space) || !UUID_OK(data.space.id) || !word(data.space.name,80) ||
       !['personal','family','community','team'].includes(data.space.kind) || !timestamp(data.space.createdAt))
     throw Error('Invalid space information');
-  const members = unique(data.members,'member'), channels = unique(data.channels,'channel');
+  unique(data.members,'member'); const channels = unique(data.channels,'channel');
   const messages = unique(data.messages,'message'); unique(data.tasks,'task'); unique(data.notes,'note');
   if(data.members.length>1000 || data.channels.length>1000)throw Error('Member or channel limit exceeded');
   const owners=data.members.filter(m=>m.role==='owner');
@@ -63,7 +63,7 @@ function validate(data) {
     throw Error('Invalid task data');
   for (const n of data.notes) if(!UUID_OK(n.authorId)||!word(n.title,120)||typeof n.body!=='string'||n.body.length>20000||!timestamp(n.updatedAt))
     throw Error('Invalid note data');
-  for (const f of data.files) if(!UUID_OK(f.uploaderId)||!timestamp(f.uploadedAt)||!word(f.name,128)||
+  for (const f of data.files) if(!UUID_OK(f.uploaderId)||!timestamp(f.uploadedAt)||!word(f.name,128)||f.name.trim()!==f.name||
      /[\\/\x00-\x1f\x7f]/.test(f.name)||typeof f.contentBase64!=='string')throw Error('Invalid attachment data');
   return owners[0].id;
 }
@@ -104,8 +104,8 @@ export function importSpaceExport({ source, destination, ownerUsername, ownerPas
       if(people.has(sourceId))return people.get(sourceId);
       const id=randomUUID(), archived=members.get(sourceId);
       const fakeSalt=randomBytes(16).toString('hex');
-      const unknownCredential=randomBytes(32);
-      const fakeHash=scryptSync(unknownCredential,fakeSalt,64).toString('hex');unknownCredential.fill(0);
+      // Random unreachable verifier: no reusable login credential is generated or retained.
+      const fakeHash=randomBytes(64).toString('hex');
       // Locked placeholders retain attribution but intentionally have no space membership.
       const username='archived_'+id.replace(/-/g,'').slice(0,20);
       run('INSERT INTO users(id,username,display_name,salt,password_hash,created_at) VALUES(?,?,?,?,?,?)',

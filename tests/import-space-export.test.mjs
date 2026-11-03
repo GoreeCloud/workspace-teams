@@ -76,7 +76,11 @@ test('isolated v2 import restores messages, replies, tasks, notes and binary fil
     const messages=await fetch(base+'/api/channels/'+channel.id+'/messages',{headers:{Cookie:cookie}});
     const history=(await messages.json()).messages;
     assert.equal(history.length,2);
-    assert.equal(history[1].parentId,history[0].id);
+    const original=history.find(m=>m.body==='message by old collaborator');
+    const reply=history.find(m=>m.body==='old removed contributor replied');
+    assert.equal(original.author,'Old Collaborator');
+    assert.equal(reply.author,'Former contributor');
+    assert.equal(reply.parentId,original.id);
     const files=await fetch(base+'/api/spaces/'+found.id+'/files',{headers:{Cookie:cookie}});
     const file=(await files.json()).files[0];
     const dl=await fetch(base+'/api/files/'+file.id+'/download',{headers:{Cookie:cookie}});
