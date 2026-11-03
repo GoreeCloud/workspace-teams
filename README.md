@@ -2,25 +2,24 @@
 
 **A self-hosted home for conversations, ideas, people, and the things you make together.**
 
-GoreeCloud Workspace Teams is a personal-first communication and collaboration platform for one person, families, friends, communities, and organizations. The complete product vision includes messaging, voice and video, forums, documents, tasks, calendars, events, social features, secure integrations, and extensibility—operated on infrastructure controlled by its owner.
+GoreeCloud Workspace Teams is a personal-first collaboration platform designed for an individual, family, friends, community, or organization. The target platform includes messaging, voice/video, forums, files, documents, tasks, calendars and owner-controlled extensibility. The current implementation is a **limited web/API alpha**, not the completed platform or a production release.
 
-> **Status: early alpha foundation (November 2026).** This repository contains a **working web/API prototype**, **not** the complete 28-area platform, a public deployment, or a production-ready release. See [Capability tracker](docs/CAPABILITIES.md) for explicit delivered/planned distinctions.
+## Implemented in this alpha
 
-## What works today
+- **Private accounts and spaces:** local first-owner bootstrap, scrypt password hashing, HttpOnly session cookies, personal/family/community/team spaces, role checks and local SQLite data.
+- **Invitations and membership:** one-use invitations, account creation through invites, existing-user invitation acceptance, a member directory, owner-managed removal and immediate revocation of active message streams for removed members.
+- **Channels and real-time chat:** channel history, Server-Sent Events, message editing/deleting by authors or space owners, basic reply references, input validation and live changes.
+- **Find your work:** permission-filtered, case-insensitive substring search of messages, tasks and notes in spaces you can access.
+- **Tasks and shared notes:** create, update, delete and read personal or shared items within authorized spaces.
+- **Web client:** responsive GoreeCloud UI-informed alpha layouts for messaging, tasks, notes, search and members; safe text-only user content and keyboard focus.
+- **Backups:** a consistent, integrity-checked SQLite snapshot command that refuses to overwrite an existing destination.
+- **Quality gates:** no external JavaScript dependencies/CDN, API authorization regression tests and GitHub Actions checks.
 
-- Local first-owner bootstrap with password hashing (scrypt), cookie sessions, and private-by-default access.
-- Personal, family, community, and team spaces with per-space owner/member membership checks.
-- Text channels with persistent channel messages and live Server-Sent Events updates.
-- Invitation-based signup using single-use, 24-hour invitations; no open public registration after bootstrap.
-- Per-space task lists (create, complete, remove) and shared notes (create, edit, remove).
-- Responsive web interface with mobile layouts, keyboard navigation, visible focus, and reduced-motion support.
-- Dependency-free Node.js API, local SQLite persistence, automated API tests, and container configuration.
+Not implemented: voice/video/screen sharing, direct-message UI, file uploads, rich editor, full forum/thread system, reactions, E2EE, enterprise identity, calendar, notification service, federated indexed search, automated encrypted backup, PostgreSQL, production security certification, native apps and offline sync. See the [28-area capability ledger](docs/CAPABILITIES.md) for precise target-vs-delivered distinctions.
 
-**Not implemented:** voice/video/screen sharing, end-to-end encryption, uploads, full-text search, comprehensive moderation, calendars/events, real-time collaborative documents, bots, extensions, native desktop/mobile apps, offline sync, PostgreSQL, and production backup/restore automation. Do not store sensitive or irreplaceable data in this alpha.
+## Start locally
 
-## Local development
-
-Requires Node.js **22.16.0 or later** (the built-in `node:sqlite` API is experimental in this release).
+Requires **Node.js 22.16+**. The built-in `node:sqlite` module remains experimental in Node 22.
 
 ```sh
 npm run check
@@ -28,7 +27,7 @@ npm test
 APP_ORIGIN=http://localhost:3000 npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000). On first run, create the instance owner with a password of at least 12 characters. By default, the server binds to `127.0.0.1` and stores application data in `./data/workspace.sqlite` (ignored by Git).
+Visit `http://localhost:3000` (the server listens on `127.0.0.1` by default). Create the first local account with a password of at least 12 characters. App data resides at `./data/workspace.sqlite`, excluded from version control. Keep the app on a trusted local/private network.
 
 ### Container preview
 
@@ -36,17 +35,22 @@ Open [http://localhost:3000](http://localhost:3000). On first run, create the in
 docker compose up --build -d
 ```
 
-The example binds to **localhost only**. For remote access, use an owner-managed HTTPS reverse proxy and set `APP_ORIGIN` to its exact HTTPS origin, keeping the service privately bound; see [Deployment](docs/DEPLOYMENT.md). Do **not** expose the alpha service directly to the public internet.
+The example host port is **localhost only**. See [deployment guidance](docs/DEPLOYMENT.md) before configuring an owner-managed HTTPS proxy. **Do not expose this alpha directly to the public internet or use irreplaceable/sensitive data.**
 
-## Documents
+### Back up a running instance
 
-- [Complete 28-area capability map](docs/CAPABILITIES.md)
-- [Architecture and persistence](docs/ARCHITECTURE.md)
-- [Security and current limitations](docs/SECURITY.md)
-- [Development, deployment, and recovery](docs/DEPLOYMENT.md)
+```sh
+npm run backup -- --db ./data/workspace.sqlite --output ./backups/workspace-2026-11-03.sqlite
+```
 
-**GoreeCloud UI** is the sole design authority. Current styles are a provisional product-specific semantic-token implementation, not a claim of formal visual acceptance or full integration with the authoritative `GoreeCloud/gc-ui` Foundations package.
+The backup tool uses the SQLite backup API, verifies integrity and refuses to replace an existing destination. It is **not encrypted**: store backup files in a protected location; perform restore drills separately. See [deployment and recovery](docs/DEPLOYMENT.md).
 
-## Current delivery and ownership
+## Documentation
 
-Self-hosting is the intended operating model. No external account is required for the implemented functions, no external SDK or CDN is used, and there is no advertising or analytics collection in this alpha. Source code visibility does not, by itself, establish a software license; a distribution license must be selected separately by the repository owner.
+- [Complete target and delivery status](docs/CAPABILITIES.md)
+- [Architecture and internal API](docs/ARCHITECTURE.md)
+- [Security model and open risks](docs/SECURITY.md)
+- [Deployment and backup](docs/DEPLOYMENT.md)
+- [Development history](docs/CHANGELOG.md)
+
+**Design:** GoreeCloud UI is the authoritative design system. Current styles are a provisional `--gc-*` implementation, not proof of full integration or formal visual acceptance. No advertising, subscriptions, telemetry or external service dependency is included in the alpha. Public source visibility does **not** establish an open-source license; repository owner licensing remains undecided.
