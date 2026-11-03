@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
-import { readFileSync, mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readFileSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
+import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, randomUUID, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
@@ -27,6 +27,8 @@ function init(db) {
     CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id,created_at);
     CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, author_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, author_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, uploader_id TEXT NOT NULL REFERENCES users(id), filename TEXT NOT NULL, size INTEGER NOT NULL CHECK(size > 0 AND size <= 2097152), sha256 TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS idx_files_space ON files(space_id, created_at);
     CREATE TABLE IF NOT EXISTS invites (token_hash TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, created_by TEXT NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL, used_by TEXT REFERENCES users(id));
     CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships(user_id, space_id);
     CREATE INDEX IF NOT EXISTS idx_notes_space ON notes(space_id, updated_at);
@@ -38,10 +40,12 @@ function init(db) {
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_id)');
 }
 
-export function createApplication({dbPath = process.env.DATA_PATH || './data/workspace.sqlite', origin = process.env.APP_ORIGIN || 'http://localhost:3000'} = {}) {
+export function createApplication({dbPath = process.env.DATA_PATH || './data/workspace.sqlite', origin = process.env.APP_ORIGIN || 'http://localhost:3000', filesPath = process.env.FILES_PATH || null} = {}) {
   if (!/^https?:\/\//.test(origin)) throw new Error('APP_ORIGIN must be an HTTP(S) origin');
   const normalizedOrigin = new URL(origin).origin;
   mkdirSync(dirname(resolve(dbPath)), {recursive:true, mode:0o700});
+  const fileDirectory = resolve(filesPath || `${resolve(dbPath)}.files`);
+  mkdirSync(fileDirectory, {recursive:true, mode:0o700});
   const db = new DatabaseSync(dbPath);
   init(db);
   const streams = new Map();
@@ -63,6 +67,27 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
     }
     try { const data=JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!data || Array.isArray(data) || typeof data !== 'object') throw new Error(); return data; }
     catch { const e=new Error('Invalid JSON object'); e.status=400; throw e; }
+  }
+  async function binaryBody(req, maxBytes=2*1024*1024) {
+    if (Number(req.headers['content-length']) > maxBytes) { const e=new Error('File exceeds 2 MiB'); e.status=413; throw e; }
+    let size=0; const chunks=[];
+    for await (const chunk of req) {
+      size+=chunk.length;
+      if (size>maxBytes) { const e=new Error('File exceeds 2 MiB'); e.status=413; throw e; }
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+  function safeFilename(value) {
+    return typeof value==='string' && value.length>=1 && value.length<=128 && value.trim()===value &&
+      value!=='.' && value!=='..' && !/[\\/\x00-\x1f\x7f]/.test(value);
+  }
+  function storedFile(id) { return join(fileDirectory,id); }
+  function fileById(id) {
+    return get('SELECT id,space_id AS spaceId,uploader_id AS uploaderId,filename,size,sha256,created_at AS createdAt FROM files WHERE id=?',id);
+  }
+  function publicFile(file) {
+    return {id:file.id,name:file.filename,size:file.size,uploadedAt:file.createdAt,uploaderId:file.uploaderId};
   }
   function sessionHash(req) {
     const value = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith('gc_session='))?.slice(11);
@@ -223,6 +248,47 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
       if(path==='/api/spaces' && method==='POST') {
         const data=await body(req);if(!validText(data.name,80)||!['personal','family','community','team'].includes(data.kind))return error(res,400,'Invalid space');
         const id=createSpace(user.id,data.name.trim(),data.kind);return send(res,201,{id});
+      }
+      const filesRoute=path.match(/^\/api\/spaces\/([0-9a-f-]{36})\/files$/);
+      if(filesRoute && ['GET','POST'].includes(method)) {
+        const spaceId=filesRoute[1];
+        if(!membership(spaceId,user.id))return error(res,404,'Space not found');
+        if(method==='GET')return send(res,200,{files:all(`SELECT id,filename AS name,size,created_at AS uploadedAt,uploader_id AS uploaderId FROM files WHERE space_id=? ORDER BY created_at DESC,id DESC LIMIT 500`,spaceId)});
+        if(!limit(`${ip}:${user.id}`,'file-upload',20,60_000))return error(res,429,'Upload rate limit');
+        if(req.headers['content-type']!=='application/octet-stream')return error(res,415,'Use application/octet-stream');
+        const filename=searchParams.get('name');
+        if(!safeFilename(filename))return error(res,400,'Invalid filename');
+        const data=await binaryBody(req);
+        if(!membership(spaceId,user.id))return error(res,404,'Space not found');
+        if(!get('SELECT token_hash FROM sessions WHERE token_hash=? AND expires_at>?',sessionHash(req),Date.now()))return error(res,401,'Session expired');
+        if(!data.length)return error(res,400,'Empty files are not supported');
+        const used=get('SELECT COALESCE(SUM(size),0) AS bytes FROM files WHERE space_id=?',spaceId).bytes;
+        if(used+data.length>32*1024*1024)return error(res,413,'Space file limit (32 MiB) exceeded');
+        const record={id:randomUUID(),spaceId,uploaderId:user.id,filename,size:data.length,sha256:digest(data),createdAt:now()};
+        writeFileSync(storedFile(record.id),data,{flag:'wx',mode:0o600});
+        try {run('INSERT INTO files(id,space_id,uploader_id,filename,size,sha256,created_at) VALUES(?,?,?,?,?,?,?)',record.id,spaceId,user.id,filename,record.size,record.sha256,record.createdAt);}
+        catch (e) {unlinkSync(storedFile(record.id));throw e;}
+        return send(res,201,{file:publicFile(record)});
+      }
+      const fileRoute=path.match(/^\/api\/files\/([0-9a-f-]{36})(?:\/(download))?$/);
+      if(fileRoute && (method==='GET'||method==='DELETE')) {
+        const file=fileById(fileRoute[1]);
+        if(!file||!membership(file.spaceId,user.id))return error(res,404,'File not found');
+        if(method==='GET' && fileRoute[2]==='download') {
+          const data=readFileSync(storedFile(file.id));
+          if(data.length!==file.size||digest(data)!==file.sha256)return error(res,500,'Stored file integrity error');
+          res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':data.length,
+            'Content-Disposition':`attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+            'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+          return res.end(data);
+        }
+        if(method==='DELETE'&&!fileRoute[2]) {
+          if(file.uploaderId!==user.id&&membership(file.spaceId,user.id)!=='owner')return error(res,403,'Not permitted');
+          // Delete data before its index to avoid a silent orphan when the filesystem rejects removal.
+          unlinkSync(storedFile(file.id));
+          run('DELETE FROM files WHERE id=?',file.id);
+          return send(res,200,{ok:true});
+        }
       }
       const spaceRoute=path.match(/^\/api\/spaces\/([0-9a-f-]{36})\/(channels|tasks|notes|invites|members)$/);
       if(spaceRoute) {
