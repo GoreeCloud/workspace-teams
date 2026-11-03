@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFileSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, unlinkSync, lstatSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -294,7 +294,10 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         const spaceId=exportRoute[1],role=membership(spaceId,user.id);
         if(!role)return error(res,404,'Space not found');
         if(role!=='owner')return error(res,403,'Owner access required');
-        if(!limit(ip+':'+user.id,'space-export',6,60_000))return error(res,429,'Too many export requests');
+        const includeFiles=searchParams.get('includeFiles');
+        if(includeFiles!==null && includeFiles!=='0' && includeFiles!=='1')return error(res,400,'Invalid includeFiles option');
+        const withFiles=includeFiles==='1';
+        if(!limit(ip+':'+user.id,withFiles?'space-export-files':'space-export',withFiles?3:6,60_000))return error(res,429,'Too many export requests');
         const count=get('SELECT COUNT(*) AS total FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.space_id=?',spaceId).total;
         if(count>10000)return error(res,413,'Space export exceeds message limit');
         const data={
@@ -307,9 +310,29 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
           notes:all('SELECT id,author_id AS authorId,title,body,updated_at AS updatedAt FROM notes WHERE space_id=? ORDER BY updated_at,id',spaceId),
           files:all('SELECT id,uploader_id AS uploaderId,filename AS name,size,sha256,created_at AS uploadedAt FROM files WHERE space_id=? ORDER BY created_at,id',spaceId)
         };
+        if(withFiles){
+          if(data.files.length>100)return error(res,413,'Portable export exceeds 100 file limit');
+          const total=data.files.reduce((sum,file)=>sum+file.size,0);
+          if(total>8*1024*1024)return error(res,413,'Portable export exceeds 8 MiB attachment limit');
+          for(const file of data.files){
+            if(!/^[0-9a-f-]{36}$/.test(file.id))return error(res,500,'Stored attachment ID invalid');
+            const location=storedFile(file.id);
+            let bytes;
+            try{
+              if(!lstatSync(location).isFile())return error(res,500,'Stored attachment is unsafe');
+              bytes=readFileSync(location);
+            }catch{return error(res,500,'Stored attachment could not be read');}
+            if(bytes.length!==file.size||digest(bytes)!==file.sha256)return error(res,500,'Stored attachment integrity error');
+            file.contentBase64=bytes.toString('base64');
+          }
+          data.schema='goreecloud.workspace-teams.space.v2';
+          data.attachmentBytesIncluded=true;
+          data.attachmentEncoding='base64';
+        }
         const json=JSON.stringify(data), bytes=Buffer.byteLength(json);
-        if(bytes>8*1024*1024)return error(res,413,'Space export exceeds 8 MiB JSON limit');
-        res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="workspace-space-'+spaceId+'.json"','Content-Length':bytes,'Cache-Control':'no-store'});
+        if(bytes>(withFiles?20:8)*1024*1024)return error(res,413,'Space JSON export exceeds size limit');
+        if(membership(spaceId,user.id)!=='owner'||!get('SELECT token_hash FROM sessions WHERE token_hash=? AND expires_at>?',sessionHash(req),Date.now()))return error(res,403,'Export access revoked');
+        res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="workspace-space-'+spaceId+(withFiles?'-with-files':'')+'.json"','Content-Length':bytes,'Cache-Control':'no-store'});
         return res.end(json);
       }
       const filesRoute=path.match(/^\/api\/spaces\/([0-9a-f-]{36})\/files$/);

@@ -81,3 +81,5 @@ A private passphrase file (`chmod 600` on Unix) is required. The self-contained 
 ### Account security (alpha)
 
 Use the account avatar to inspect the active session count, sign out other sessions, or change your password. Password rotation checks the old password, stores a new salted scrypt verifier, revokes every prior cookie, and issues a fresh cookie for this browser. This is basic account hygiene, not multi-factor authentication, device auditing, or production security assurance.
+
+- **Portable space exports:** owners can optionally download a bounded attachment-inclusive JSON space export; this is unencrypted and not a substitute for full-instance encrypted recovery.

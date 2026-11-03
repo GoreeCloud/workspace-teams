@@ -69,3 +69,7 @@ The passphrase is read from a regular private file, not a CLI argument. Unix per
 The owner-only GET /api/spaces/{id}/export route returns one space's message, task, note, member and file metadata. Authentication, ownership, space isolation, no-store headers, attachment disposition, 10,000-message and 8 MiB output limits, and per-process export throttling are enforced; no stored password/session/invitation secrets or file bytes are exported.
 
 **Privacy:** The JSON download is unencrypted and contains personal information. Store it in an encrypted private location. This is not an encrypted backup, file export, import feature, or complete retention/privacy compliance tool. Full browser acceptance and security evaluation remain pending.
+
+## Portable attachment export (alpha)
+
+The opt-in `includeFiles=1` owner JSON export includes file bytes after ID, size and SHA-256 verification, rejects symlinks and has byte/count, JSON size and request-rate limits. It is an **unencrypted** sensitive data download. No importer, full portability certification or production recovery assurances exist.
