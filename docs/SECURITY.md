@@ -42,3 +42,8 @@ Do not post secrets, personal database files, authentication cookies or private 
 - An isolated API-level snapshot/restore test verifies authenticated downloads after restoration, but broader cross-version migrations, real host filesystem restores and operational recovery procedures are unverified. Rehearse a full host-specific restore before relying on backups.
 - Query search scans eligible rows using SQLite `LIKE`; bounded limits protect responses, not worst-case CPU or database growth. Implement indexing and search abuse defenses before scaling.
 - The UI smoke test in a managed headless browser was blocked by browser administration policy. Syntax/API tests do not count as a complete visual/accessibility audit.
+
+
+## Verified isolated restore (alpha)
+
+`npm run restore -- --from BACKUP.sqlite --dest NEW_DIRECTORY` restores only to a nonexistent directory. It validates database integrity, foreign keys, attachment contents and nonempty WAL sidecars. This is not a production restore service, does not decrypt snapshots and does not establish complete disaster-recovery readiness. Keep all backups and restores private and never restore directly over a running instance.

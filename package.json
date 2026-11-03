@@ -4,6 +4,15 @@
   "private": true,
   "description": "Self-hosted personal-first communication and collaboration foundation",
   "type": "module",
-  "engines": {"node": ">=22.16.0"},
-  "scripts": {"start": "node src/server.mjs", "dev": "node --watch src/server.mjs", "test": "node --test tests/*.test.mjs", "check": "node --check src/server.mjs && node --check public/app.js && node --check scripts/backup.mjs", "backup": "node scripts/backup.mjs"}
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check src/server.mjs && node --check public/app.js && node --check scripts/backup.mjs && node --check scripts/restore.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs"
+  }
 }

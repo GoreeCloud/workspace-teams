@@ -38,3 +38,9 @@
 - Added regression tests for token non-disclosure, revoked registration/acceptance, role enforcement, and replay prevention.
 - Completed the previously local file management UI and attachment recovery tests; browser acceptance is still blocked by a managed browser policy.
 - The capability ledger remains a target specification, not a verified full feature parity claim.
+
+## 2026-11-03 — Isolated restore CLI (development)
+
+- Added non-overwriting restore to a fresh directory with database, foreign-key, WAL and attachment integrity checks.
+- Added regression coverage for restored authenticated downloads, existing-target refusal and corrupted/missing attachment rejection.
+- No live VPS restore, encryption, scheduled backups or production disaster recovery completed.
