@@ -23,7 +23,7 @@
 
 - **No completed independent security assessment, threat model, fuzzing, dependency review or production penetration testing.**
 - **No at-rest encryption or E2EE.** Database contents are readable to anyone with host/storage access.
-- **On-demand database-plus-attachment snapshots and an isolated attachment restore/download test exist, but no encrypted backup schedule or production recovery drill.** The on-demand backup CLI is tested for consistency and integrity with a running server; keep alpha data disposable and do not treat raw file snapshots of running SQLite as consistent backups.
+- **On-demand verified snapshots, optional authenticated encrypted archives, isolated restore and an optional one-shot scheduling helper exist, but no backup timer or production recovery drill is enabled.** The on-demand backup CLI is tested for consistency and integrity with a running server; keep alpha data disposable and do not treat raw file snapshots of running SQLite as consistent backups.
 - **No 2FA, passkeys, account recovery, moderation suite, retention enforcement, or admin audit interface.**
 - **No distributed lockout or session anomaly detection.** Basic memory rate limit resets on restart and is per process.
 - **No durable SSE replay cursor or horizontally scaled stream coordination.** Stream authorization is now rechecked on broadcast/heartbeat and member-removal or logout streams are closed, but connection replay and multiple-node event routing remain unbuilt.
@@ -62,7 +62,7 @@ This is not a device inventory. Device names, login history, alerts, MFA and dur
 
 The passphrase is read from a regular private file, not a CLI argument. Unix permission checks reject group/world-readable files; symlinked files are rejected. A minimum 16-byte passphrase is enforced (long random credentials are recommended). Keep the key separate from archives; losing it makes the archive unrecoverable.
 
-**Security limitations:** both backup creation and restore temporarily stage unencrypted database/attachments in restricted OS temp directories, and ordinary deletion is not secure erasure. No host-compromise defense, scheduled/offsite backup, automatic key management, recovery assurance or full independent cryptographic audit is claimed. The older `backup` command remains unencrypted.
+**Security limitations:** both backup creation and restore temporarily stage unencrypted database/attachments in restricted OS temp directories, and ordinary deletion is not secure erasure. No host-compromise defense, enabled scheduled/offsite backup, automatic key management, recovery assurance or full independent cryptographic audit is claimed. The older `backup` command remains unencrypted.
 
 ## Owner JSON export (alpha)
 

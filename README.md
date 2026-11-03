@@ -14,10 +14,10 @@ GoreeCloud Workspace Teams is a personal-first collaboration platform designed f
 - **Space portability:** owners can download a scoped JSON export of conversations, notes, tasks, channels, members and attachment metadata (not file bytes). See [space export](docs/EXPORT.md).
 - **Tasks and shared notes:** create, update, delete and read personal or shared items within authorized spaces.
 - **Web client:** responsive GoreeCloud UI-informed alpha layouts for messaging, tasks, notes, search, members and files; safe text-only user content and keyboard focus.
-- **Backups:** an integrity-checked SQLite snapshot plus attachment sidecar that refuses to overwrite existing destinations.
+- **Backups and recovery:** unencrypted integrity-checked SQLite-plus-attachment snapshots, optional encrypted GCWSENC1 archives, isolated restore, and a one-shot scheduled-backup runner with optional systemd examples. No production schedule or offsite backup is active.
 - **Quality gates:** no external JavaScript dependencies/CDN, API authorization regression tests and GitHub Actions checks.
 
-Not implemented: voice/video/screen sharing, direct-message UI, large files and previews, rich editor, full forum/thread system, reactions, E2EE, enterprise identity, calendar, notification service, federated indexed search, automated encrypted backup, PostgreSQL, production security certification, native apps and offline sync. See the [28-area capability ledger](docs/CAPABILITIES.md) for precise target-vs-delivered distinctions.
+Not implemented: voice/video/screen sharing, direct-message UI, large files and previews, rich editor, full forum/thread system, reactions, E2EE, enterprise identity, calendar, notification service, federated indexed search, automatically enabled/offsite encrypted backups, PostgreSQL, production security certification, native apps and offline sync. See the [28-area capability ledger](docs/CAPABILITIES.md) for precise target-vs-delivered distinctions.
 
 
 ## Optional encrypted backup scheduling
@@ -50,7 +50,7 @@ The example host port is **localhost only**. See [deployment guidance](docs/DEPL
 npm run backup -- --db ./data/workspace.sqlite --output ./backups/workspace-2026-11-03.sqlite
 ```
 
-The backup tool verifies SQLite and attachment integrity and refuses to overwrite previous snapshots. Backups are **not encrypted**; store them in a protected location. To restore into a **brand-new** isolated directory:
+The basic backup command creates an **unencrypted** verified snapshot and refuses to overwrite previous files. The optional `backup:encrypted` and `restore:encrypted` commands support passphrase-protected GCWSENC1 archives. The `backup:scheduled` command and systemd examples exist but have **not** been enabled on a GoreeCloud host; see [encrypted backup scheduling](docs/BACKUP_SCHEDULING.md). Treat every unencrypted snapshot as private data. To restore into a **brand-new** isolated directory:
 
 ```sh
 npm run restore -- --from ./backups/workspace-2026-11-03.sqlite --dest ./restored-test-instance

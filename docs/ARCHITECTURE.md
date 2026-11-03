@@ -59,7 +59,7 @@ Future compatibility gates include migration version tracking, transaction-level
 
 `files` stores per-space metadata, uploader identity, size, timestamp and SHA-256 digest. Binary bytes live in an owner-controlled local directory, by default `<DATA_PATH>.files`, keyed only by a random UUID. Uploaded names are metadata and are never used as filesystem paths. `FILES_PATH` optionally selects another trusted local directory. GET, upload, and delete endpoints enforce authenticated space membership; delete requires file uploader or space owner. Download responses force `Content-Disposition: attachment` and `application/octet-stream`, use `nosniff` and no-store, and verify content before sending. The feature deliberately lacks media previews, malware scanning, external storage, large file support, client-side encryption, or multipart uploads.
 
-The on-demand backup CLI snapshots SQLite first and copies only files referenced by that snapshot into `<output>.files` after matching each byte stream to SHA-256/size metadata; absent or corrupt files abort the backup. Data is not encrypted and there is no automated restore rehearsal.
+The on-demand backup CLI snapshots SQLite first and copies only files referenced by that snapshot into `<output>.files` after matching each byte stream to SHA-256/size metadata; absent or corrupt files abort the backup. The basic backup is unencrypted; optional encrypted GCWSENC1 archives, an isolated restore command, and a non-destructive one-shot scheduling helper are implemented and tested locally/through CI. No active production schedule or automated host recovery rehearsal is established.
 
 
 ## Basic account-security APIs (alpha)
