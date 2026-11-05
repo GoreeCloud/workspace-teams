@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { createRateLimiter } from './rate-limit.mjs';
-import { readFileSync, mkdirSync, writeFileSync, unlinkSync, lstatSync } from 'node:fs';
+import { readVerifiedAttachment } from './read-attachment.mjs';
+import { readFileSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -310,13 +311,9 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
           if(total>8*1024*1024)return error(res,413,'Portable export exceeds 8 MiB attachment limit');
           for(const file of data.files){
             if(!/^[0-9a-f-]{36}$/.test(file.id))return error(res,500,'Stored attachment ID invalid');
-            const location=storedFile(file.id);
             let bytes;
-            try{
-              if(!lstatSync(location).isFile())return error(res,500,'Stored attachment is unsafe');
-              bytes=readFileSync(location);
-            }catch{return error(res,500,'Stored attachment could not be read');}
-            if(bytes.length!==file.size||digest(bytes)!==file.sha256)return error(res,500,'Stored attachment integrity error');
+            try { bytes=readVerifiedAttachment(storedFile(file.id),file.size,file.sha256); }
+            catch { return error(res,500,'Stored attachment integrity error'); }
             file.contentBase64=bytes.toString('base64');
           }
           data.schema='goreecloud.workspace-teams.space.v2';
@@ -355,8 +352,9 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         const file=fileById(fileRoute[1]);
         if(!file||!membership(file.spaceId,user.id))return error(res,404,'File not found');
         if(method==='GET' && fileRoute[2]==='download') {
-          const data=readFileSync(storedFile(file.id));
-          if(data.length!==file.size||digest(data)!==file.sha256)return error(res,500,'Stored file integrity error');
+          let data;
+          try { data=readVerifiedAttachment(storedFile(file.id),file.size,file.sha256); }
+          catch { return error(res,500,'Stored file integrity error'); }
           res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':data.length,
             'Content-Disposition':`attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
             'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
