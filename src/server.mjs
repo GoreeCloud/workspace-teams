@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { createRateLimiter } from './rate-limit.mjs';
 import { readFileSync, mkdirSync, writeFileSync, unlinkSync, lstatSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,7 +52,7 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
   const db = new DatabaseSync(dbPath);
   init(db);
   const streams = new Map();
-  const attempts = new Map();
+  const limit = createRateLimiter();
   const get = (sql, ...args) => db.prepare(sql).get(...args);
   const all = (sql, ...args) => db.prepare(sql).all(...args);
   const run = (sql, ...args) => db.prepare(sql).run(...args);
@@ -106,13 +107,6 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
   }
   function membership(spaceId,userId) {return get('SELECT role FROM memberships WHERE space_id=? AND user_id=?',spaceId,userId)?.role || null;}
   function channelSpace(channelId) {return get('SELECT space_id AS spaceId FROM channels WHERE id=?',channelId)?.spaceId;}
-  function limit(ip, action, max, intervalMs) {
-    const key=`${ip}:${action}`, t=Date.now(), prev=attempts.get(key) || [], recent=prev.filter(x=>t-x<intervalMs);
-    if (recent.length>=max) return false;
-    recent.push(t); attempts.set(key,recent);
-    if(attempts.size>10000) attempts.clear();
-    return true;
-  }
   function streamIsAuthorized(channelId, client) {
     const spaceId = channelSpace(channelId);
     return !!(spaceId && membership(spaceId, client.userId) && get('SELECT token_hash FROM sessions WHERE token_hash=? AND expires_at>?', client.sessionHash, Date.now()));

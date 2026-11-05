@@ -12,7 +12,7 @@
 - Space membership required for retrieving/sending messages and reading/mutating tasks and notes; ownership gates for invitations and channel creation.
 - Parameterized SQL queries, max JSON request size (32 KiB), bounded text inputs, restrained CSP, `nosniff`, denied frames and strict referrer policy.
 - Client renders all user-authored text using `textContent`, not dynamic HTML insertion.
-- Simple in-memory login and message rate limits; no analytics/telemetry or external service connections.
+- Bounded, fail-closed in-memory request limits preserve active restrictions under key-space saturation; no analytics/telemetry or external service connections.
 - Space owner can revoke another member; their open SSE streams are closed and future channel reads and search are denied. Sessions and membership are rechecked on event delivery and heartbeat.
 - Message edits and removals are author- or owner-restricted; reply targets must belong to the same channel.
 - Search is restricted to spaces joined by the current account and escapes wildcard characters.
@@ -25,7 +25,7 @@
 - **No at-rest encryption or E2EE.** Database contents are readable to anyone with host/storage access.
 - **On-demand verified snapshots, optional authenticated encrypted archives, isolated restore and an optional one-shot scheduling helper exist, but no backup timer or production recovery drill is enabled.** The on-demand backup CLI is tested for consistency and integrity with a running server; keep alpha data disposable and do not treat raw file snapshots of running SQLite as consistent backups.
 - **No 2FA, passkeys, account recovery, moderation suite, retention enforcement, or admin audit interface.**
-- **No distributed lockout or session anomaly detection.** Basic memory rate limit resets on restart and is per process.
+- **No distributed lockout or session anomaly detection.** Bounded in-process rate limits reset on restart and do not coordinate between servers. When the 10,000-key capacity is exhausted, unknown keys are denied until old windows expire; a sustained flood can therefore affect availability. Place this alpha behind trusted network protections.
 - **No durable SSE replay cursor or horizontally scaled stream coordination.** Stream authorization is now rechecked on broadcast/heartbeat and member-removal or logout streams are closed, but connection replay and multiple-node event routing remain unbuilt.
 - **Invite link is a bearer secret.** Share privately. Avoid public URLs, logs and link preview crawlers. Invitation registration removes the query from browser history after successful submission, but previously emitted URLs may remain in intermediaries.
 - **HTTP must remain localhost-only.** Use HTTPS for remote connections, with trusted reverse-proxy configuration and exact `APP_ORIGIN`.
@@ -72,4 +72,4 @@ The default owner-only GET /api/spaces/{id}/export route returns one space's mes
 
 ## Portable attachment export (alpha)
 
-The opt-in `includeFiles=1` owner JSON export includes file bytes after ID, size and SHA-256 verification, rejects symlinks and has byte/count, JSON size and request-rate limits. It is an **unencrypted** sensitive data download. No importer, full portability certification or production recovery assurances exist.
+The opt-in `includeFiles=1` owner JSON export includes file bytes after ID, size and SHA-256 verification, rejects symlinks and has byte/count, JSON size and request-rate limits. It is an **unencrypted** sensitive data download. An offline isolated v2 importer exists, but there is no in-place import, full portability certification or production recovery assurance.
