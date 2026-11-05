@@ -33,6 +33,10 @@ The reviewed examples are `deploy/systemd/workspace-teams-backup.service` and `.
 
 **No scheduled deployment, pruning, remote upload or external notification was performed by adding these source files.**
 
+## Offline archive verification (not a deployment)
+
+Run `npm run backup:verify -- --from ARCHIVE.gcws --passphrase-file PRIVATE_KEY_FILE` after copying the archive and key to a trusted machine. The offline command temporarily restores a *new* private test instance, authenticates the archive, checks SQLite and attachment integrity, then deletes the temporary copy. It never targets an existing database or starts a production service. Wrong keys and tampered archives return a nonzero exit status. Keep the key separate from archived copies and use encrypted temporary storage: plaintext exists temporarily during this check. Passing does not prove that a complete production recovery or cross-host login will work.
+
 ## Safety and limitations
 
 The underlying encrypted snapshot temporarily stages **plaintext** database and attachments in an OS temporary directory protected by restrictive filesystem permissions. Deletion does not guarantee forensic erasure; use encrypted/secured temporary storage. The backup key must be held independently of offsite encrypted archives; losing it permanently prevents recovery. The snapshot is an application-consistent SQLite online backup, but may not capture an upload concurrently committed to storage at the exact instant of snapshot; the underlying backup helper will reject missing or mismatched attachments rather than silently claim consistency.
