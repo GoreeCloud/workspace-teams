@@ -16,7 +16,12 @@ case "$1 $2" in
     ;;
   'volume inspect')
     if [ "$FAKE_DOCKER_CASE" = 'inspect-fails' ]; then exit 1; fi
-    if [ "$FAKE_DOCKER_CASE" = 'wrong-label' ]; then echo 'other-project'; else echo 'goreecloud-workspace-teams'; fi
+    case "$*" in
+      *com.docker.compose.volume*)
+        if [ "$FAKE_DOCKER_CASE" = 'wrong-volume-label' ]; then echo other_volume; else echo "\${3#goreecloud-workspace-teams_}"; fi
+        ;;
+      *) if [ "$FAKE_DOCKER_CASE" = 'wrong-label' ]; then echo 'other-project'; else echo 'goreecloud-workspace-teams'; fi ;;
+    esac
     ;;
   'ps -a')
     if [ "$FAKE_DOCKER_CASE" = 'ps-fails' ]; then exit 1; fi
@@ -53,7 +58,7 @@ test('expected six-volume inventory reports preservation, never recovery certifi
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /six expected legacy/);
   assert.match(r.stdout, /STILL BLOCKED/);
-  assert.equal(r.records.length, 14);
+  assert.equal(r.records.length, 20);
 });
 test('missing preserved volume fails closed', t => {
   const r = invoke(t, 'missing');
@@ -71,6 +76,11 @@ test('altered project labels fail closed', t => {
   const r = invoke(t, 'wrong-label');
   assert.equal(r.status, 2);
   assert.match(r.stderr, /unexpected Compose project label/);
+});
+test('altered Compose volume-key labels fail closed', t => {
+  const r = invoke(t, 'wrong-volume-label');
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /unexpected Compose volume-key label/);
 });
 test('preexisting container reference blocks the audit', t => {
   const r = invoke(t, 'in-use');

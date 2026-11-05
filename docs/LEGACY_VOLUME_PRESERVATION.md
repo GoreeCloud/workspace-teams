@@ -15,6 +15,8 @@ On November 5, 2026, a metadata-only check verified these six Compose-labeled vo
 
 At that check, docker ps -a reported zero containers referencing these volumes and no containers carrying the old Compose project label. **Zero container references do not imply zero data, no historical dependencies, or safe deletion.**
 
+**Original Compose definition located (November 5, 2026):** A read-only parse of the authorized primary VPS copy at services/workspace-teams/deploy/compose.yaml identifies services named db, mattermost and web. The db service declares pg_data; the Mattermost service declares the five mm_* volumes. A separate thread-testing copy contains an identical Compose file (SHA-256 87a5ce7bf2696228d2bb5c0c72dbc0aa3f58a62178cd4e2df4528b6e2922a26f). The six volumes' Docker metadata also contain matching Compose project and volume-key labels, with creation timestamps on October 29, 2026 shortly after the Compose source timestamp. This establishes declared historical service-to-volume provenance, **not stored contents, ownership or backup recoverability.**
+
 ## Repeat the read-only metadata check
 
 Run this from an authorized host with access to the relevant Docker daemon:
@@ -25,11 +27,11 @@ Run this from an authorized host with access to the relevant Docker daemon:
 
 The script runs only docker volume ls, docker volume inspect, and docker ps -a with metadata-format arguments. It does not enumerate directory contents, open databases, mount volumes, create containers, run images, or make Docker state changes. It does not request elevated privileges. Review the script's source and permissions before executing on another host.
 
-Exit status 0 means only that the six-volume metadata baseline matches and there are no current container references; 2 indicates unexpected or missing volumes/labels; 3 indicates container references; 4 indicates missing Docker access or a metadata-read error; and 64 indicates unsupported arguments. **Even an exit status of 0 explicitly keeps recovery readiness BLOCKED.** The baseline reflects one host's verified state and must not be reused blindly for unrelated deployments.
+Exit status 0 means only that the six-volume metadata baseline matches and there are no current container references; 2 indicates unexpected or missing volumes, project labels or volume-key labels; 3 indicates container references; 4 indicates missing Docker access or a metadata-read error; and 64 indicates unsupported arguments. **Even an exit status of 0 explicitly keeps recovery readiness BLOCKED.** The baseline reflects one host's verified state and must not be reused blindly for unrelated deployments.
 
 ## Required gates before any migration or cleanup
 
-1. Establish the original Compose configuration, operators, and ownership through authorized historical records. Identify service dependencies without changing running systems.
+1. Preserve the located historical Compose definition and establish the original operators, asset ownership and deployment history through authorized records. Identify service dependencies without changing running systems.
 2. Confirm whether historical application and PostgreSQL data are valuable. Preserve permissions, identities, and retention obligations; do not interpret names as proof of contents.
 3. Inventory independently protected backups and access to recovery credentials, then prove restoration in a separately authorized isolated environment. An archive name or successful backup command is not evidence of a usable restore.
 4. Verify the native Workspace Teams release's still-open first-owner setup, backup destination, access control, UI, and host-specific recovery gates before introducing it onto this VPS.
