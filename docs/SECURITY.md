@@ -17,7 +17,7 @@
 - Message edits and removals are author- or owner-restricted; reply targets must belong to the same channel.
 - Search is restricted to spaces joined by the current account and escapes wildcard characters.
 - Private file APIs enforce membership for listing/downloading, owner/uploader checks for deletion, 2 MiB upload and 32 MiB per-space limits, SHA-256 file verification, bounded regular-file reads with no-follow and inode checks for downloads and portable exports, no inline file serving, and non-executable opaque storage names.
-- Backups use a consistent SQLite snapshot plus SHA-256-verified attachment copy, refuse overwrites and set restrictive file permissions.
+- Backups use a consistent SQLite snapshot plus bounded, descriptor-verified attachment reads (regular files only, no following final-path symlinks), and write the exact bytes that passed SHA-256 verification. Snapshots refuse overwrites and set restrictive file permissions.
 
 ## Open issues before wider use
 
