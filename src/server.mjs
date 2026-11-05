@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { createRateLimiter } from './rate-limit.mjs';
 import { readVerifiedAttachment } from './read-attachment.mjs';
+import { hasStreamCapacity } from './stream-capacity.mjs';
 import { readFileSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -448,6 +449,7 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
           }
         }
         if(section==='stream' && method==='GET') {
+          if(!hasStreamCapacity(streams,user.id))return send(res,429,{error:'Too many live stream connections'},{'Retry-After':'30'});
           res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
           res.write(': connected\n\n');
           if(!streams.has(channelId))streams.set(channelId,new Set());
