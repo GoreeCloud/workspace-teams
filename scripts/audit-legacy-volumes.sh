@@ -45,6 +45,15 @@ for volume in $expected; do
     echo "BLOCKED: unexpected Compose project label on $volume." >&2
     exit 2
   fi
+  if ! volume_key=$(docker volume inspect "$volume" --format '{{index .Labels "com.docker.compose.volume"}}'); then
+    echo "BLOCKED: cannot inspect Compose volume-key label for $volume." >&2
+    exit 4
+  fi
+  expected_key=${volume#"$project"_}
+  if [ "$volume_key" != "$expected_key" ]; then
+    echo "BLOCKED: unexpected Compose volume-key label on $volume." >&2
+    exit 2
+  fi
   if ! references=$(docker ps -a --filter "volume=$volume" --format '{{.ID}}'); then
     echo "BLOCKED: cannot inspect container references for $volume." >&2
     exit 4
