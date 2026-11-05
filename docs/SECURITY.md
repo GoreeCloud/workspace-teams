@@ -13,7 +13,7 @@
 - Parameterized SQL queries, max JSON request size (32 KiB), bounded text inputs, restrained CSP, `nosniff`, denied frames and strict referrer policy.
 - Client renders all user-authored text using `textContent`, not dynamic HTML insertion.
 - Bounded, fail-closed in-memory request limits preserve active restrictions under key-space saturation; no analytics/telemetry or external service connections.
-- Space owner can revoke another member; their open SSE streams are closed and future channel reads and search are denied. Sessions and membership are rechecked on event delivery and heartbeat.
+- Space owner can revoke another member; their open SSE streams are closed and future channel reads and search are denied. Sessions and membership are rechecked on event delivery and heartbeat. Live SSE connections are capped at eight per account and 128 per process; disconnected streams release their slots.
 - Message edits and removals are author- or owner-restricted; reply targets must belong to the same channel.
 - Search is restricted to spaces joined by the current account and escapes wildcard characters.
 - Private file APIs enforce membership for listing/downloading, owner/uploader checks for deletion, 2 MiB upload and 32 MiB per-space limits, SHA-256 file verification, bounded regular-file reads with no-follow and inode checks for downloads and portable exports, no inline file serving, and non-executable opaque storage names.
@@ -26,7 +26,7 @@
 - **On-demand verified snapshots, optional authenticated encrypted archives, isolated restore and an optional one-shot scheduling helper exist, but no backup timer or production recovery drill is enabled.** The on-demand backup CLI is tested for consistency and integrity with a running server; keep alpha data disposable and do not treat raw file snapshots of running SQLite as consistent backups.
 - **No 2FA, passkeys, account recovery, moderation suite, retention enforcement, or admin audit interface.**
 - **No distributed lockout or session anomaly detection.** Bounded in-process rate limits reset on restart and do not coordinate between servers. When the 10,000-key capacity is exhausted, unknown keys are denied until old windows expire; a sustained flood can therefore affect availability. Place this alpha behind trusted network protections.
-- **No durable SSE replay cursor or horizontally scaled stream coordination.** Stream authorization is now rechecked on broadcast/heartbeat and member-removal or logout streams are closed, but connection replay and multiple-node event routing remain unbuilt.
+- **No durable SSE replay cursor or horizontally scaled stream coordination.** Stream authorization is rechecked on broadcast/heartbeat; member-removal and logout streams are closed. The eight-per-user and 128-per-process capacity limits are local to a single process, not coordinated across replicas. Replay and multiple-node event routing remain unbuilt.
 - **Invite link is a bearer secret.** Share privately. Avoid public URLs, logs and link preview crawlers. Invitation registration removes the query from browser history after successful submission, but previously emitted URLs may remain in intermediaries.
 - **HTTP must remain localhost-only.** Use HTTPS for remote connections, with trusted reverse-proxy configuration and exact `APP_ORIGIN`.
 - **Uploaded files are untrusted.** No malware scanner, content-type verification, content disarm, image previews or enterprise retention policies exist; browser downloads are forced as attachments (`application/octet-stream`).
