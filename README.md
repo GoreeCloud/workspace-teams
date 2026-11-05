@@ -20,6 +20,10 @@ GoreeCloud Workspace Teams is a personal-first collaboration platform designed f
 Not implemented: voice/video/screen sharing, direct-message UI, large files and previews, rich editor, full forum/thread system, reactions, E2EE, enterprise identity, calendar, notification service, federated indexed search, automatically enabled/offsite encrypted backups, PostgreSQL, production security certification, native apps and offline sync. See the [28-area capability ledger](docs/CAPABILITIES.md) for precise target-vs-delivered distinctions.
 
 
+## Historical Docker volume preservation
+
+A distinct, earlier Compose project may have left Mattermost/PostgreSQL-related volumes on the authorized GoreeCloud VPS. Their contents and recoverability remain unknown: never delete, mount or migrate them based on names or zero container references alone. A read-only audit can check their fixed metadata baseline without changing Docker state: `npm run audit:legacy-volumes`. See [legacy volume preservation](docs/LEGACY_VOLUME_PRESERVATION.md). This audit is not a release or migration approval.
+
 ## Optional encrypted backup scheduling
 
 A one-shot encrypted backup wrapper and example systemd timer are available for host administrators. They do **not** activate a schedule, rotate/delete existing archives, or configure production backups. See [Encrypted backup scheduling](docs/BACKUP_SCHEDULING.md) for setup, locking, private key storage, and isolated recovery checks.
