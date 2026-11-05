@@ -11,7 +11,7 @@
     "start": "node src/server.mjs",
     "dev": "node --watch src/server.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check src/server.mjs && node --check public/app.js && node --check scripts/backup.mjs && node --check scripts/restore.mjs && node --check scripts/secure-archive.mjs && node --check scripts/scheduled-backup.mjs && node --check scripts/verify-space-export.mjs && node --check scripts/import-space-export.mjs && node --check scripts/browser-acceptance.mjs",
+    "check": "node --check src/server.mjs && node --check src/rate-limit.mjs && node --check public/app.js && node --check scripts/backup.mjs && node --check scripts/restore.mjs && node --check scripts/secure-archive.mjs && node --check scripts/scheduled-backup.mjs && node --check scripts/verify-space-export.mjs && node --check scripts/import-space-export.mjs && node --check scripts/browser-acceptance.mjs",
     "backup": "node scripts/backup.mjs",
     "restore": "node scripts/restore.mjs",
     "backup:encrypted": "node scripts/secure-archive.mjs backup",
