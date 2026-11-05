@@ -3,7 +3,18 @@ const state = {user:null, initialized:false, spaces:[],space:null,channels:[],ch
 const inviteFromURL = new URLSearchParams(location.search).get('invite');
 let toastTimer;
 let useExistingAccount = false;
-function showToast(message) {const toast=$('#toast'); toast.textContent=message;toast.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('visible'),4500);}
+function showToast(message) {
+  const toast=$('#toast'), pane=$('#main-pane'), shell=$('#app');
+  // Auth feedback stays visible on its standalone screen. Inside the app,
+  // status appears in document flow below the header, never on top of tools.
+  if(state.user && shell && !shell.hidden && pane) {
+    if(toast.parentElement!==pane)pane.insertBefore(toast,pane.children[1]||null);
+  } else if(toast.parentElement!==document.body)document.body.append(toast);
+  toast.textContent=message;
+  toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toast.classList.remove('visible'),4500);
+}
 async function api(path,{method='GET',data}={}) {const response=await fetch('/api'+path,{method,headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,credentials:'same-origin'});const result=await response.json();if(!response.ok)throw new Error(result.error||'Something went wrong');return result;}
 function el(tag,classes,text) {const node=document.createElement(tag);if(classes)node.className=classes;if(text!==undefined)node.textContent=text;return node;}
 function clear(node) {node.replaceChildren();}

@@ -91,9 +91,25 @@ try {
   await page.click('#file-form button[type=submit]');
   await page.waitForFunction(() => document.querySelector('#file-list')?.textContent.includes('synthetic-browser-file.txt'), { timeout: 12000 });
   mark('private file upload and list');
+  await page.waitForSelector('#toast.visible', { timeout: 12000 });
 
   await page.click('[data-tool="members"]');
   await page.waitForSelector('#space-export:not([hidden])', { timeout: 12000 });
+  const feedback = await page.evaluate(() => {
+    const toast = document.querySelector('#toast');
+    const link = document.querySelector('#space-export-files-link');
+    return {
+      host: toast.parentElement.id,
+      position: getComputedStyle(toast).position,
+      visible: toast.classList.contains('visible'),
+      nonOverlapping: toast.getBoundingClientRect().bottom <= link.getBoundingClientRect().top,
+    };
+  });
+  assert.equal(feedback.host, 'main-pane');
+  assert.equal(feedback.position, 'static');
+  assert.equal(feedback.visible, true);
+  assert.equal(feedback.nonOverlapping, true, 'Status banner must not cover export controls');
+  mark('workspace status avoids overlap with export controls');
   const href = await page.$eval('#space-export-files-link', element => element.getAttribute('href'));
   assert.match(href, /includeFiles=1/);
   const exported = await page.evaluate(async relative => {
