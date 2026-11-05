@@ -62,3 +62,9 @@ The `GCWSENC1` archive is a single authenticated AES-256-GCM envelope containing
 ## Build and test gates
 
 CI performs `npm run check` and `npm test` on Node 22.16.0. These cover syntax, first-user bootstrap, space permissions, message editing/replies/removal, authorization-scoped search, invitation use, owner revocation with live-stream closure, online backup integrity and origin rejection. They now include an isolated attachment restore-and-download test and owner invitation-revocation tests. They do not cover real browser visual interaction, mobile/native packaging, Docker runtime, accessibility audit, load, or production security acceptance.
+
+## Offline verification of an encrypted archive (alpha)
+
+Run `npm run backup:verify -- --from /private/backups/ARCHIVE.gcws --passphrase-file /private/backup-key` on a trusted machine. This performs an authenticated, **isolated temporary restore** with the same SQLite, foreign-key and attachment-integrity checks as the explicit restore command. It never overwrites or deploys a database; after a pass/fail result it removes its disposable restored copy. A failed check exits nonzero. Retain the original archive and the independently safeguarded decryption key.
+
+This is a local integrity and recovery-format check, **not** a substitute for an independently rehearsed full application login, offsite restoration, RPO/RTO verification or host-specific disaster recovery. Decrypted plaintext is temporarily present in a private OS temp directory and ordinary deletion cannot guarantee forensic erasure. Use encrypted temporary storage and least-privilege administration.
