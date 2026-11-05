@@ -16,7 +16,7 @@
 - Space owner can revoke another member; their open SSE streams are closed and future channel reads and search are denied. Sessions and membership are rechecked on event delivery and heartbeat.
 - Message edits and removals are author- or owner-restricted; reply targets must belong to the same channel.
 - Search is restricted to spaces joined by the current account and escapes wildcard characters.
-- Private file APIs enforce membership for listing/downloading, owner/uploader checks for deletion, 2 MiB upload and 32 MiB per-space limits, SHA-256 file verification, no inline file serving, and non-executable opaque storage names.
+- Private file APIs enforce membership for listing/downloading, owner/uploader checks for deletion, 2 MiB upload and 32 MiB per-space limits, SHA-256 file verification, bounded regular-file reads with no-follow and inode checks for downloads and portable exports, no inline file serving, and non-executable opaque storage names.
 - Backups use a consistent SQLite snapshot plus SHA-256-verified attachment copy, refuse overwrites and set restrictive file permissions.
 
 ## Open issues before wider use
