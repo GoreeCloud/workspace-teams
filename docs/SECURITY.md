@@ -29,7 +29,7 @@
 - **No durable SSE replay cursor or horizontally scaled stream coordination.** Stream authorization is rechecked on broadcast/heartbeat; member-removal and logout streams are closed. The eight-per-user and 128-per-process capacity limits are local to a single process, not coordinated across replicas. Replay and multiple-node event routing remain unbuilt.
 - **Invite link is a bearer secret.** Share privately. Avoid public URLs, logs and link preview crawlers. Invitation registration removes the query from browser history after successful submission, but previously emitted URLs may remain in intermediaries.
 - **HTTP must remain localhost-only.** Use HTTPS for remote connections, with trusted reverse-proxy configuration and exact `APP_ORIGIN`.
-- **Uploaded files are untrusted.** No malware scanner, content-type verification, content disarm, image previews or enterprise retention policies exist; browser downloads are forced as attachments (`application/octet-stream`).
+- **Uploaded files are untrusted.** No actual malware scanner, content-type verification, content disarm, image previews or enterprise retention policies exist; browser downloads are forced as attachments (`application/octet-stream`). The [development-only pending attachment hold](SCAN_HOLD_STAGING.md) can explicitly block ordinary downloads and exports while unreviewed, without connecting to Wardveil or creating release authority. Default legacy alpha behavior remains **unscanned**, and backups/imports require the documented private-enforcement and retention review.
 - **Static file serving uses an explicit allowlist**, but administrative filesystem protections, container isolation and reverse proxy settings still require testing.
 
 ## Reporting
