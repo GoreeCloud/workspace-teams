@@ -33,6 +33,7 @@ function init(db) {
     CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, uploader_id TEXT NOT NULL REFERENCES users(id), filename TEXT NOT NULL, size INTEGER NOT NULL CHECK(size > 0 AND size <= 2097152), sha256 TEXT NOT NULL, created_at TEXT NOT NULL, scan_state TEXT NOT NULL DEFAULT 'legacy_unreviewed' CHECK(scan_state IN ('legacy_unreviewed','pending','released','blocked')));
     CREATE INDEX IF NOT EXISTS idx_files_space ON files(space_id, created_at);
     CREATE TABLE IF NOT EXISTS invites (token_hash TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, created_by TEXT NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL, used_by TEXT REFERENCES users(id));
+    CREATE TABLE IF NOT EXISTS attachment_hold_policy (singleton INTEGER PRIMARY KEY CHECK(singleton=1), activated_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships(user_id, space_id);
     CREATE INDEX IF NOT EXISTS idx_notes_space ON notes(space_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_space ON tasks(space_id, created_at);`);
@@ -60,6 +61,15 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
   mkdirSync(fileDirectory, {recursive:true, mode:0o700});
   const db = new DatabaseSync(dbPath);
   init(db);
+  // A sticky database latch prevents a later legacy-mode restart from
+  // exposing any unreviewed files once hold enforcement was enabled.
+  const previouslyHeld = db.prepare('SELECT activated_at FROM attachment_hold_policy WHERE singleton=1').get();
+  if (enforceAttachmentHold) {
+    db.prepare('INSERT OR IGNORE INTO attachment_hold_policy(singleton,activated_at) VALUES(1,?)').run(now());
+  } else if (previouslyHeld) {
+    db.close();
+    throw new Error('Attachment scan hold is latched for this database; legacy mode is denied');
+  }
   const streams = new Map();
   const limit = createRateLimiter();
   const get = (sql, ...args) => db.prepare(sql).get(...args);
@@ -101,15 +111,20 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
   function publicFile(file) {
     return {id:file.id,name:file.filename,size:file.size,uploadedAt:file.createdAt,uploaderId:file.uploaderId,scanState:file.scanState};
   }
+  // A separately running legacy-mode instance must also observe a hold that
+  // another process has latched since startup, not just its initial option.
+  function holdActive() {
+    return enforceAttachmentHold || !!get('SELECT activated_at FROM attachment_hold_policy WHERE singleton=1');
+  }
   // Even the legacy mode never makes a previously held attachment public.
   // Only an explicit trusted owner release may mark a scanned file 'released'.
   // No release endpoint is implemented by this development-only increment.
   function ordinaryFileAccess(file) {
     return !!file && (file.scanState==='released' ||
-      (!enforceAttachmentHold && file.scanState==='legacy_unreviewed'));
+      (!holdActive() && file.scanState==='legacy_unreviewed'));
   }
   function spaceHasHeldFiles(spaceId) {
-    const permittedStates=enforceAttachmentHold?['released']:['released','legacy_unreviewed'];
+    const permittedStates=holdActive()?['released']:['released','legacy_unreviewed'];
     const row=get('SELECT scan_state AS state FROM files WHERE space_id=? AND scan_state NOT IN ('+
       permittedStates.map(()=>'?').join(',')+') LIMIT 1',spaceId,...permittedStates);
     return !!row;
@@ -355,7 +370,7 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
       if(filesRoute && ['GET','POST'].includes(method)) {
         const spaceId=filesRoute[1];
         if(!membership(spaceId,user.id))return error(res,404,'Space not found');
-        if(method==='GET')return send(res,200,{files:all(`SELECT id,filename AS name,size,created_at AS uploadedAt,uploader_id AS uploaderId,scan_state AS scanState FROM files WHERE space_id=? AND (scan_state='released' OR (?=1 AND scan_state='legacy_unreviewed')) ORDER BY created_at DESC,id DESC LIMIT 500`,spaceId,enforceAttachmentHold?0:1)});
+        if(method==='GET')return send(res,200,{files:all(`SELECT id,filename AS name,size,created_at AS uploadedAt,uploader_id AS uploaderId,scan_state AS scanState FROM files WHERE space_id=? AND (scan_state='released' OR (?=1 AND scan_state='legacy_unreviewed')) ORDER BY created_at DESC,id DESC LIMIT 500`,spaceId,holdActive()?0:1)});
         if(!limit(`${ip}:${user.id}`,'file-upload',20,60_000))return error(res,429,'Upload rate limit');
         if(req.headers['content-type']!=='application/octet-stream')return error(res,415,'Use application/octet-stream');
         const filename=searchParams.get('name');
@@ -366,7 +381,7 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         if(!data.length)return error(res,400,'Empty files are not supported');
         const used=get('SELECT COALESCE(SUM(size),0) AS bytes FROM files WHERE space_id=?',spaceId).bytes;
         if(used+data.length>32*1024*1024)return error(res,413,'Space file limit (32 MiB) exceeded');
-        const record={id:randomUUID(),spaceId,uploaderId:user.id,filename,size:data.length,sha256:digest(data),createdAt:now(),scanState:enforceAttachmentHold?'pending':'legacy_unreviewed'};
+        const record={id:randomUUID(),spaceId,uploaderId:user.id,filename,size:data.length,sha256:digest(data),createdAt:now(),scanState:holdActive()?'pending':'legacy_unreviewed'};
         writeFileSync(storedFile(record.id),data,{flag:'wx',mode:0o600});
         try {run('INSERT INTO files(id,space_id,uploader_id,filename,size,sha256,created_at,scan_state) VALUES(?,?,?,?,?,?,?,?)',record.id,spaceId,user.id,filename,record.size,record.sha256,record.createdAt,record.scanState);}
         catch (e) {unlinkSync(storedFile(record.id));throw e;}
