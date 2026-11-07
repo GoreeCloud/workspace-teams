@@ -145,16 +145,12 @@ test('legacy migration, held uploads, and explicit release fixtures survive rest
   assert.equal(pending.data.file.scanState, 'pending');
   await app.close();
 
-  // Switching to the old alpha's legacy mode must NEVER expose an
-  // attachment that has already entered pending state.
-  app = await launch(dbPath, 'legacy');
-  assert.equal((await request(app.base, '/files/' + pending.data.file.id + '/download', { cookie })).status, 423);
-  assert.equal((await request(app.base, '/files/' + old.data.file.id + '/download', { cookie })).status, 200);
-  listing = await request(app.base, '/spaces/' + space.id + '/files', { cookie });
-  assert.equal(listing.data.files.length, 1);
-  assert.equal(listing.data.files[0].id, old.data.file.id);
-  assert.equal((await request(app.base, '/spaces/' + space.id + '/export', { cookie })).status, 423);
-  await app.close();
+  // A persistent database latch forbids an accidental rollback of hold mode
+  // that might re-expose legacy-unreviewed attachments after enforcement.
+  assert.throws(() => createApplication({ dbPath, attachmentHoldMode: 'legacy' }), /hold is latched/);
+  const latchedDb = new DatabaseSync(dbPath);
+  assert.ok(latchedDb.prepare('SELECT activated_at FROM attachment_hold_policy WHERE singleton=1').get());
+  latchedDb.close();
 
   // This is a synthetic DB fixture that models a future trusted owner
   // transaction after proper scanning and review. NO release HTTP/API
@@ -178,7 +174,7 @@ test('legacy migration, held uploads, and explicit release fixtures survive rest
   await app.close();
 });
 
-test('offline attachment backups preserve pending state across restore and legacy-mode reopening', async t => {
+test('offline attachment backups preserve pending and the enforcement latch across restore', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'gc-wst-hold-backup-'));
   const dbPath = join(dir, 'source.sqlite');
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -203,14 +199,14 @@ test('offline attachment backups preserve pending state across restore and legac
   assert.equal(restoredDb.prepare('SELECT scan_state FROM files').get().scan_state, 'pending');
   restoredDb.close();
 
-  for (const mode of ['legacy', 'enforce']) {
-    app = await launch(result.database, mode);
-    assert.equal((await request(app.base, '/files/' + uploaded.data.file.id + '/download', { cookie })).status, 423,
-      'restored pending bytes exposed after mode change');
-    assert.equal((await request(app.base, '/spaces/' + space.id + '/export?includeFiles=1', { cookie })).status, 423);
-    assert.deepEqual((await request(app.base, '/spaces/' + space.id + '/files', { cookie })).data.files, []);
-    await app.close();
-  }
+  assert.throws(() => createApplication({ dbPath: result.database, attachmentHoldMode: 'legacy' }), /hold is latched/,
+    'restored scan policy must not be downgraded');
+  app = await launch(result.database, 'enforce');
+  assert.equal((await request(app.base, '/files/' + uploaded.data.file.id + '/download', { cookie })).status, 423,
+    'restored pending bytes were exposed');
+  assert.equal((await request(app.base, '/spaces/' + space.id + '/export?includeFiles=1', { cookie })).status, 423);
+  assert.deepEqual((await request(app.base, '/spaces/' + space.id + '/files', { cookie })).data.files, []);
+  await app.close();
 });
 
 test('isolated imported attachment is unreviewed, and enforced mode denies live promotion', async t => {
@@ -265,4 +261,43 @@ test('isolated imported attachment is unreviewed, and enforced mode denies live 
     cookie: login.cookie
   })).status, 423);
   await app.close();
+});
+
+test('existing legacy process sees another process activate the persistent hold latch', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'gc-wst-hold-cross-process-'));
+  const dbPath = join(dir, 'shared.sqlite');
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const oldInstance = await launch(dbPath, 'legacy');
+  const owner = await request(oldInstance.base, '/bootstrap', {
+    method: 'POST', data: { username: 'owner', password: 'owner-passphrase-for-test-2026' }
+  });
+  const cookie = owner.cookie;
+  const space = (await request(oldInstance.base, '/spaces', { cookie })).data.spaces[0];
+  const earlier = await request(oldInstance.base, '/spaces/' + space.id + '/files?name=legacy.bin', {
+    method: 'POST', cookie, binary: 'CROSS_INSTANCE_OLD_UNREVIEWED_CONTENT'
+  });
+  assert.equal(earlier.status, 201);
+  assert.equal((await request(oldInstance.base, '/files/' + earlier.data.file.id + '/download', { cookie })).status, 200);
+
+  // Different application object, same disposable WAL database. A preexisting
+  // legacy process must recheck the DB latch, not rely on its startup option.
+  const enforcedInstance = await launch(dbPath, 'enforce');
+  assert.equal((await request(oldInstance.base, '/files/' + earlier.data.file.id + '/download', { cookie })).status, 423);
+  assert.deepEqual((await request(oldInstance.base, '/spaces/' + space.id + '/files', { cookie })).data.files, []);
+  assert.equal((await request(oldInstance.base, '/spaces/' + space.id + '/export', { cookie })).status, 423);
+  assert.equal((await request(oldInstance.base, '/spaces/' + space.id + '/export?includeFiles=1', { cookie })).status, 423);
+
+  const later = await request(oldInstance.base, '/spaces/' + space.id + '/files?name=later.bin', {
+    method: 'POST', cookie, binary: 'CROSS_INSTANCE_NEW_HELD_ATTACHMENT'
+  });
+  assert.equal(later.status, 201);
+  assert.equal(later.data.file.scanState, 'pending',
+    'legacy process created new unheld file after another worker activated hold');
+  assert.equal((await request(oldInstance.base, '/files/' + later.data.file.id + '/download', { cookie })).status, 423);
+  await enforcedInstance.close();
+  // The latch must remain effective for the preexisting legacy process after
+  // the enforcing worker exits.
+  assert.equal((await request(oldInstance.base, '/files/' + earlier.data.file.id + '/download', { cookie })).status, 423);
+  await oldInstance.close();
+  assert.throws(() => createApplication({ dbPath, attachmentHoldMode: 'legacy' }), /hold is latched/);
 });
