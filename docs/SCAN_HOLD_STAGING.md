@@ -25,9 +25,9 @@ const app = createApplication({
 });
 ```
 
-This programmatic option is for isolated development/QA only. There is **no environment-variable, CLI, REST, cookie or query-parameter switch** that authorizes bypassing or enabling this mode, and no production scanner activation path. Invalid values fail startup. When omitted, `attachmentHoldMode` defaults to `'legacy'` to preserve the current alpha behavior for preexisting users **until a separate deployment/migration decision is approved**. Legacy mode must never be presented as scanned or security-certified.
+This programmatic option is for isolated development/QA only. There is **no environment-variable, CLI, REST, cookie or query-parameter switch** that authorizes bypassing or enabling this mode, and no production scanner activation path. Invalid values fail startup. When omitted, `attachmentHoldMode` defaults to `'legacy'` to preserve the current alpha behavior for preexisting users **until a separate deployment/migration decision is approved**. Legacy mode must never be presented as scanned or security-certified. **Once hold mode is activated for a database, legacy mode is rejected on startup; do not attempt to clear the latch manually.** A previously running legacy app instance also sees the latch via SQLite on subsequent file routes. This prevents a mixed-process or accidental reboot downgrade in the reviewed local alpha design.
 
-A previously pending or blocked file remains inaccessible **even if the application is later reopened in legacy mode**. Only `released` is readable in enforcement mode. The `released` value is a reserved source-owned state, **not a scanner verdict**; this PR deliberately does not expose any endpoint that changes it.
+Enforcement writes a **persistent SQLite policy latch**. After any instance enables hold mode, a new legacy-mode startup fails; an existing legacy-mode instance rechecks the latch on every file access or upload and immediately applies enforced restrictions. A previously pending or blocked file is also inaccessible before the latch is set. Only `released` is readable in enforcement mode. The `released` value is a reserved source-owned state, **not a scanner verdict**; this PR deliberately does not expose any endpoint that changes it.
 
 ## Stored state and migration
 
@@ -40,7 +40,7 @@ The `files` table adds a `scan_state` column with an additive idempotent SQLite 
 | `blocked` | Reserved for future owner hold/revocation enforcement | Denied in **both** modes |
 | `released` | Future owner-authorized state transition (not implemented) | Allowed subject to existing identity, membership and byte integrity checks |
 
-A migration from a prior database maps old files to `legacy_unreviewed`, **not** `released`. Starting enforcement against such a database holds legacy files rather than silently grandfathering them. No rows are reclassified, scanned, deleted or made public automatically by migration. In legacy mode, new uploads receive `legacy_unreviewed`; in enforcement mode, new uploads receive `pending`. A caller-supplied query parameter or JSON field cannot request a release.
+A migration from a prior database maps old files to `legacy_unreviewed`, **not** `released`. The separate `attachment_hold_policy` singleton stores the first activation timestamp; activation is monotonic for the lifetime of the trusted database. A rollback to legacy mode requires an explicit owner-reviewed migration/recovery process, not a mode toggle. Starting enforcement against such a database holds legacy files rather than silently grandfathering them. No rows are reclassified, scanned, deleted or made public automatically by migration. In legacy mode, new uploads receive `legacy_unreviewed`; in enforcement mode, new uploads receive `pending`. A caller-supplied query parameter or JSON field cannot request a release.
 
 ## Access-path review
 
@@ -51,7 +51,7 @@ The same server-side state rule is enforced on ordinary routes; changing browser
 - **Download `GET /api/files/:id/download`:** after membership check, refuse any state not eligible for ordinary read with HTTP 423. Recheck current state, file version metadata, membership and session immediately before sending the verified bytes. This guards against a state/identity change while reading.
 - **Owner export `GET /api/spaces/:id/export`:** if any file in the requested space is held, **both metadata-only and attachment-inclusive** exports return HTTP 423 without partial contents. Recheck the hold before responding, after building the export. A hold must never be silently omitted from an apparently complete export.
 - **Delete `DELETE /api/files/:id`:** retains existing uploader/owner permission checks and source-owner deletion behavior. Retention, evidence preservation and legal holds are **not** implemented; production deletion of held/quarantined content needs separate owner-approved policy.
-- **Backup/restore:** offline backup still includes authorized private attachment bytes; it preserves the SQLite `scan_state` values when restored. A restored `pending` file remains inaccessible even in legacy mode. Backups are **not** a member-facing export and may be plaintext; they require operator protection and GoreeShield retention controls.
+- **Backup/restore:** offline backup still includes authorized private attachment bytes; it preserves the SQLite `scan_state` values when restored. A restored `pending` file remains inaccessible; the restored policy latch also **rejects legacy-mode startup**. Backups/restore must carry the SQLite database and sidecar files together. Recovery from an **older snapshot predating activation** still requires separately approved rollback/reconciliation; this local latch is not tamper-proof. Backups are **not** a member-facing export and may be plaintext; they require operator protection and GoreeShield retention controls.
 - **Isolated v2 import:** existing importer assigns its existing default `legacy_unreviewed` to imported bytes; it **does not fabricate a scan verdict or release**. When an imported instance is opened in enforcement mode, imported bytes are blocked. Do not promote an imported/restored instance into an exposed environment without approved hold-state transition and revalidation.
 - **Preview/stream/public sharing:** no additional attachment preview or public share routes are currently implemented in this alpha. Every future path must apply the same source-owned policy, including downloads from background tasks, cache, backup promotion, or new clients.
 
@@ -61,9 +61,9 @@ The standalone `tests/attachment-hold-gates.test.mjs` suite exercises:
 
 1. Pending new uploads hidden from both member and owner lists and downloads; both export modes denied, including query attempts to supply a release state.
 2. Existing membership, authentication, and deletion rights; no unauthenticated or user-controlled release endpoint.
-3. Additive old-schema migration and explicit `legacy_unreviewed` classification; enforced mode rejects old files. Restarting in legacy mode **does not** expose a previously pending file.
+3. Additive old-schema migration and explicit `legacy_unreviewed` classification; enforced mode rejects old files. Once enforcement is activated, **legacy startup is refused** even if older records were previously readable. A concurrently running legacy process observes the database latch and blocks ordinary access/new uploads immediately.
 4. Test-only direct SQLite state transition to `released`, followed by ordinary read/export after reopening in enforcement mode. **This is only a synthetic fixture, not a production release implementation or authorization example.**
-5. Offline backup/restoration preserving `pending` and denying normal access in both modes.
+5. Offline backup/restoration preserving `pending` and the durable enforcement latch, rejecting an attempted legacy-mode recovery.
 6. Isolated v2 import preserving unreviewed status and denying normal access under enforcement.
 
 Run on an authorized development checkout:
