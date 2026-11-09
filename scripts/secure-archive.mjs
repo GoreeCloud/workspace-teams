@@ -4,7 +4,7 @@ import {
   createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync,
 } from 'node:crypto';
 import {
-  chmodSync, closeSync, createReadStream, createWriteStream, existsSync, lstatSync,
+  chmodSync, closeSync, constants, createReadStream, createWriteStream, existsSync, fstatSync, lstatSync,
   mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, rmSync, statSync,
   writeFileSync, writeSync,
 } from 'node:fs';
@@ -37,15 +37,39 @@ function secretFromFile(path) {
   if (!path) throw new Error('A --passphrase-file is required; secrets are never accepted in command-line arguments');
   const location = resolve(path);
   if (!regularFile(location)) throw new Error('Passphrase source must be a regular file (not a symlink)');
-  if (process.platform !== 'win32' && (lstatSync(location).mode & 0o077)) {
-    throw new Error('Passphrase file must not be accessible by group or others (chmod 600)');
+  // Check the opened inode, not the pathname: its target could be replaced
+  // between lstat and read. On POSIX, O_NOFOLLOW rejects a swapped symlink.
+  const flags = constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NOFOLLOW);
+  const fd = openSync(location, flags);
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile()) throw new Error('Passphrase source must be a regular file (not a symlink)');
+    if (process.platform !== 'win32' && (info.mode & 0o077)) {
+      throw new Error('Passphrase file must not be accessible by group or others (chmod 600)');
+    }
+    if (info.size > 4096) throw new Error('Passphrase file exceeds the supported limit');
+    // A fixed-size read also bounds memory when another process grows the file
+    // after fstat; readFileSync(path) could otherwise consume unbounded bytes.
+    const raw = Buffer.alloc(4097);
+    try {
+      let bytes = 0;
+      while (bytes < raw.length) {
+        const n = readSync(fd, raw, bytes, raw.length - bytes, bytes);
+        if (n === 0) break;
+        bytes += n;
+      }
+      if (bytes > 4096) throw new Error('Passphrase file exceeds the supported limit');
+      const passphrase = raw.subarray(0, bytes).toString('utf8').replace(/\r?\n$/, '');
+      if (Buffer.byteLength(passphrase, 'utf8') < 16) {
+        throw new Error('Passphrase must contain at least 16 UTF-8 bytes');
+      }
+      return passphrase;
+    } finally {
+      raw.fill(0);
+    }
+  } finally {
+    closeSync(fd);
   }
-  const raw = readFileSync(location);
-  if (raw.length > 4096) throw new Error('Passphrase file exceeds the supported limit');
-  const passphrase = raw.toString('utf8').replace(/\r?\n$/, '');
-  raw.fill(0);
-  if (Buffer.byteLength(passphrase, 'utf8') < 16) throw new Error('Passphrase must contain at least 16 UTF-8 bytes');
-  return passphrase;
 }
 function derive(passphrase, salt) {
   return scryptSync(passphrase, salt, 32, KDF_OPTIONS);
