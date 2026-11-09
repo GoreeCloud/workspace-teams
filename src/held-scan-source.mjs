@@ -10,7 +10,33 @@ const OWNER_PRODUCT = 'workspace-teams';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/;
 const MAX_LEASE_MS = 5 * 60 * 1000;
+const REQUEST_FIELDS = Object.freeze([
+  'schema_version', 'request_id', 'owner_product', 'object_id',
+  'sha256', 'size_bytes', 'requested_at'
+]);
 function rejected() { return new Error('Held scan source authorization or pending lease rejected'); }
+
+// Wardveil metadata crosses a service trust boundary. Read only inert, own
+// data descriptors: getters, inherited fields, symbols and extra fields may
+// never influence claim identity or owner file lookup.
+function trustedRequestSnapshot(input) {
+  try {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw rejected();
+    const prototype = Object.getPrototypeOf(input);
+    if (prototype !== Object.prototype && prototype !== null) throw rejected();
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    const keys = Reflect.ownKeys(descriptors);
+    if (keys.length !== REQUEST_FIELDS.length ||
+        keys.some(key => typeof key !== 'string' || !REQUEST_FIELDS.includes(key))) throw rejected();
+    const result = Object.create(null);
+    for (const key of REQUEST_FIELDS) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) throw rejected();
+      result[key] = descriptor.value;
+    }
+    return result;
+  } catch { throw rejected(); }
+}
 
 export function createHeldScanLeaseStore({ dbPath, filesPath, authorizeIssue, authenticateScanner, nowMs = () => Date.now() } = {}) {
   if (typeof dbPath !== 'string' || !dbPath.trim() || typeof authorizeIssue !== 'function' ||
@@ -77,7 +103,7 @@ export function createHeldScanLeaseStore({ dbPath, filesPath, authorizeIssue, au
     }
   }
   function issueLease({ fileId, ownerProof, ttlMs = 60_000 } = {}) {
-    if (!UUID.test(fileId || '') || !Number.isSafeInteger(ttlMs) ||
+    if (typeof fileId !== 'string' || !UUID.test(fileId) || !Number.isSafeInteger(ttlMs) ||
         ttlMs < 1000 || ttlMs > MAX_LEASE_MS) throw rejected();
     const issuedAt = clock();
     return transaction(() => {
@@ -102,7 +128,7 @@ export function createHeldScanLeaseStore({ dbPath, filesPath, authorizeIssue, au
   }
   // Source owner can revoke an issued lease, never release the source file.
   function revokeLease({ leaseId, ownerProof } = {}) {
-    if (!UUID.test(leaseId || '')) throw rejected();
+    if (typeof leaseId !== 'string' || !UUID.test(leaseId)) throw rejected();
     return transaction(() => {
       const lease = get('SELECT * FROM scan_source_leases WHERE lease_id=?', leaseId);
       if (!lease) throw rejected();
@@ -118,8 +144,9 @@ export function createHeldScanLeaseStore({ dbPath, filesPath, authorizeIssue, au
   // Consumes a lease before content delivery; failed integrity retains hold.
   function claimHeld({ request, credential } = {}) {
     verifyScanner(credential);
-    if (!request || request.schema_version !== '1' ||
-        request.owner_product !== OWNER_PRODUCT || !UUID.test(request.request_id || '') ||
+    request = trustedRequestSnapshot(request);
+    if (request.schema_version !== '1' ||
+        request.owner_product !== OWNER_PRODUCT || typeof request.request_id !== 'string' || !UUID.test(request.request_id) ||
         typeof request.object_id !== 'string' ||
         typeof request.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(request.sha256) ||
         !Number.isSafeInteger(request.size_bytes) || request.size_bytes < 1) throw rejected();
