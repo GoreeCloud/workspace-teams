@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, statSync, copyFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, statSync, copyFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
@@ -102,7 +102,19 @@ test('weak or insecure passphrase files are rejected before creating encrypted o
   if (process.platform !== 'win32') {
     const publicPath = join(f.folder, 'unsafe-key');
     writeFileSync(publicPath, 'long-enough-but-not-private-passphrase', { mode: 0o644 });
+    // The process may have a restrictive umask (e.g. 077); make the fixture
+    // demonstrably insecure rather than assuming create mode wins over umask.
+    chmodSync(publicPath, 0o644);
+    assert.equal(statSync(publicPath).mode & 0o077, 0o044);
     await assert.rejects(() => createEncryptedArchive({ dbPath: f.dbPath, outputPath: output, passphraseFile: publicPath }), /chmod 600/);
     assert.equal(existsSync(output), false);
+    const link = join(f.folder, 'linked-secret');
+    symlinkSync(f.passphraseFile, link);
+    await assert.rejects(() => createEncryptedArchive({ dbPath: f.dbPath, outputPath: output, passphraseFile: link }), /regular file/);
+    assert.equal(existsSync(output), false);
   }
+  const oversized = join(f.folder, 'overlong-secret');
+  writeFileSync(oversized, 'x'.repeat(4097), { mode: 0o600 });
+  await assert.rejects(() => createEncryptedArchive({ dbPath: f.dbPath, outputPath: output, passphraseFile: oversized }), /exceeds the supported limit/);
+  assert.equal(existsSync(output), false);
 });
