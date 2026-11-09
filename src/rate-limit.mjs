@@ -17,7 +17,9 @@ export function createRateLimiter({ maxKeys = 10_000, clock = Date.now } = {}) {
     }
     const time = clock();
     if (!Number.isFinite(time)) throw new TypeError('Clock must return a finite timestamp');
-    const key = client + ':' + action;
+    // Delimiter concatenation aliases distinct pairs such as
+    // ('a:b', 'c') and ('a', 'b:c'). Encode the tuple unambiguously.
+    const key = JSON.stringify([client, action]);
     const previous = windows.get(key);
     if (previous) {
       const recent = previous.timestamps.filter(timestamp => time >= timestamp && time - timestamp < intervalMs);
