@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync, unlinkSync, writeFileSync, symlinkSync, lstatSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
@@ -67,5 +67,59 @@ test('invalid or missing attachment aborts restore without creating target',asyn
   } finally {
     if(original)await stop(original);
     rmSync(folder,{recursive:true,force:true});
+  }
+});
+
+
+test('restore refuses symlinked destination ancestors and final dangling links', async t => {
+  if (process.platform === 'win32') return t.skip('Symlink creation requires privileges on Windows');
+  const root = mkdtempSync(join(tmpdir(), 'ws-restore-ancestor-'));
+  let app;
+  try {
+    const fixture = await setup(root);
+    app = fixture.app;
+    const snapshot = join(root, 'backup.sqlite');
+    await backupDatabase({ dbPath: fixture.source, outputPath: snapshot });
+    await stop(app);
+    app = null;
+
+    const unrelated = join(root, 'unrelated');
+    const realParent = join(root, 'private-destination-parent');
+    const linkedParent = join(root, 'linked-parent');
+    const danglingDest = join(root, 'dangling-restore');
+    const nested = join(realParent, 'nested', 'still-new', 'restore');
+    const empty = join(root, 'no-existing-file');
+    // The checked ancestor is a link, not the final destination.
+    mkdirSync(realParent, { mode: 0o700 });
+    writeFileSync(unrelated, 'preserved-notes', { mode: 0o600 });
+    symlinkSync(realParent, linkedParent, 'dir');
+    symlinkSync(empty, danglingDest, 'dir');
+
+    assert.throws(
+      () => restoreSnapshot({ source: snapshot, destination: join(linkedParent, 'restore') }),
+      /ancestry.*real directories/,
+    );
+    assert.equal(existsSync(join(realParent, 'restore')), false);
+    assert.equal(readFileSync(unrelated, 'utf8'), 'preserved-notes');
+
+    assert.throws(
+      () => restoreSnapshot({ source: snapshot, destination: danglingDest }),
+      /new, nonexistent/,
+    );
+    assert.equal(lstatSync(danglingDest).isSymbolicLink(), true);
+    assert.equal(existsSync(empty), false);
+
+    const accepted = restoreSnapshot({ source: snapshot, destination: nested });
+    assert.equal(accepted.files, 1);
+    assert.equal(statSync(join(realParent, 'nested')).isDirectory(), true);
+    assert.equal(readFileSync(join(nested, 'workspace.sqlite.files', fixture.file.id), 'utf8'),
+      'restored-content');
+    if (process.platform !== 'win32') {
+      assert.equal(statSync(join(realParent, 'nested')).mode & 0o077, 0);
+      assert.equal(statSync(join(realParent, 'nested', 'still-new')).mode & 0o077, 0);
+    }
+  } finally {
+    if (app) await stop(app);
+    rmSync(root, { recursive: true, force: true });
   }
 });
