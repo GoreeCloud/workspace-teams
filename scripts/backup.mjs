@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /** Create a consistent, non-overwriting SQLite snapshot without stopping the application. */
 import { backup, DatabaseSync } from 'node:sqlite';
-import { existsSync, chmodSync, copyFileSync, mkdirSync, rmSync, statSync, constants, readFileSync, renameSync } from 'node:fs';
+import { existsSync, chmodSync, copyFileSync, writeFileSync, mkdirSync, rmSync, statSync, constants, renameSync } from 'node:fs';
 import { resolve, dirname, basename, join } from 'node:path';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { readVerifiedAttachment } from '../src/read-attachment.mjs';
 import { fileURLToPath } from 'node:url';
 
 export async function backupDatabase({dbPath, outputPath, filesPath}) {
@@ -28,9 +29,14 @@ export async function backupDatabase({dbPath, outputPath, filesPath}) {
         mkdirSync(tempFiles,{recursive:false,mode:0o700});
         for(const file of records){
           if(!/^[0-9a-f-]{36}$/.test(file.id))throw new Error('Invalid stored attachment ID');
-          const data=readFileSync(join(sourceFiles,file.id));
-          if(data.length!==file.size||createHash('sha256').update(data).digest('hex')!==file.sha256)throw new Error(`Attachment integrity verification failed: ${file.id}`);
-          copyFileSync(join(sourceFiles,file.id),join(tempFiles,file.id),constants.COPYFILE_EXCL);
+          // Verify a single opened descriptor, then snapshot precisely those bytes.
+          // Never reopen the source between digest verification and copy.
+          let data;
+          try { data=readVerifiedAttachment(join(sourceFiles,file.id),file.size,file.sha256); }
+          catch { throw new Error(`Attachment integrity verification failed: ${file.id}`); }
+          try {
+            writeFileSync(join(tempFiles,file.id),data,{flag:'wx',mode:0o600});
+          } finally { data.fill(0); }
           chmodSync(join(tempFiles,file.id),0o600);
         }
         renameSync(tempFiles,targetFiles);stagedSidecar=true;
