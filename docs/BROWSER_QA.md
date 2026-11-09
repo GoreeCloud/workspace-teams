@@ -24,6 +24,21 @@ Run npm run check and npm test in addition to the optional smoke check. The stan
 
 On **November 3, 2026**, a fresh checkout of GoreeCloud/workspace-teams was tested on the authorized Linux laptop using Node.js 24.19.0 and a preinstalled Chromium/Puppeteer environment. The original live-browser run exposed an inaccessible mobile logout control; the revised dialog flow passed. The opt-in repeatable smoke test passed **12/12** checks with the Chromium sandbox enabled. Syntax checks and the core 34-test suite passed after the fix.
 
+**November 9, 2026 isolated replay:** On development main
+8a2a3721bc30cc3c8cd97dfdd77a5598e54df6b0 plus a separate, local
+restore-destination safety patch, Node.js 24 and preinstalled Chromium with
+locally cached Puppeteer 25.12.0 completed **13/13 live browser checks**.
+The suite exercised real HTTP requests, first-owner setup, live DOM messages
+and tasks, authenticated space search, upload, attachment-inclusive owner
+export, status/banner geometry, account dialog, mobile 390px layout,
+mobile/desktop sign-out and uncaught JavaScript errors. The same disposable
+checkout passed **64/64 core Node tests** after restoring through a safe,
+private nested destination and refusing linked destination ancestors.
+No application account, production host, live database, persisted browser
+profile, new package installation or remote deployment was involved.
+This does **not** certify host recovery, screen readers, performance,
+cross-browser compatibility, full visual QA or production access policy.
+
 This is evidence of **one synthetic development environment**, not comprehensive visual approval, accessibility certification, cross-browser/device compatibility, performance testing, native client acceptance, production security assessment, or host-level disaster recovery. Screenshots require manual inspection and comparison with current GoreeCloud UI design authority. Do not describe CI as running real browsers unless its workflow actually provisions and executes them.
 ## Status feedback layout check
 
