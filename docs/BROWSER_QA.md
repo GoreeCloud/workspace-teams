@@ -32,7 +32,7 @@ The suite exercised real HTTP requests, first-owner setup, live DOM messages
 and tasks, authenticated space search, upload, attachment-inclusive owner
 export, status/banner geometry, account dialog, mobile 390px layout,
 mobile/desktop sign-out and uncaught JavaScript errors. The same disposable
-checkout passed **64/64 core Node tests** after restoring through a safe,
+checkout passed **65/65 core Node tests** after restoring through a safe,
 private nested destination and refusing linked destination ancestors.
 No application account, production host, live database, persisted browser
 profile, new package installation or remote deployment was involved.
