@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, statSync, copyFileSync, symlinkSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, statSync, copyFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
@@ -117,4 +117,31 @@ test('weak or insecure passphrase files are rejected before creating encrypted o
   writeFileSync(oversized, 'x'.repeat(4097), { mode: 0o600 });
   await assert.rejects(() => createEncryptedArchive({ dbPath: f.dbPath, outputPath: output, passphraseFile: oversized }), /exceeds the supported limit/);
   assert.equal(existsSync(output), false);
+});
+
+
+test('authenticated encrypted restore rejects linked parent without writing into its target', async t => {
+  if (process.platform === 'win32') return t.skip('Symlink creation requires Windows privileges');
+  const f = await fixture(t);
+  const archive = join(f.folder, 'immutable.gcws');
+  await createEncryptedArchive({ dbPath: f.dbPath, outputPath: archive, passphraseFile: f.passphraseFile });
+  await f.stop();
+
+  const realParent = join(f.folder, 'private-parent');
+  mkdirSync(realParent, { mode: 0o700 });
+  const alias = join(f.folder, 'linked-parent');
+  symlinkSync(realParent, alias, 'dir');
+  const invalid = join(alias, 'would-cross-link');
+  await assert.rejects(
+    () => restoreEncryptedArchive({ source: archive, destination: invalid, passphraseFile: f.passphraseFile }),
+    /ancestry.*real directories/,
+  );
+  assert.equal(existsSync(join(realParent, 'would-cross-link')), false);
+  assert.equal(existsSync(invalid), false);
+
+  // A legitimate private nested recovery must still work after denial.
+  const good = join(realParent, 'new', 'restored');
+  const outcome = await restoreEncryptedArchive({ source: archive, destination: good, passphraseFile: f.passphraseFile });
+  assert.equal(outcome.files, 1);
+  assert.equal(readFileSync(join(good, 'workspace.sqlite.files', f.file.id), 'utf8'), f.payload);
 });

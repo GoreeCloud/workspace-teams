@@ -2,11 +2,33 @@
 /** Restore a verified offline snapshot to a new, private directory. */
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, lstatSync, mkdirSync, readFileSync, copyFileSync, chmodSync, rmSync, constants } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
+import { resolve, dirname, join, parse, relative, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const regular = path => existsSync(path) && lstatSync(path).isFile();
+
+// Check every existing ancestor rather than trusting recursive mkdir or
+// realpath(), either of which could silently traverse an attacker-controlled
+// symbolic link. Newly created parents are private, one component at a time.
+// This is a static-path development guard; concurrent hostile namespace swaps
+// still require OS-level directory handles/O_NOFOLLOW in a production restorer.
+function prepareSafeDestinationParent(destination) {
+  const parent = dirname(destination);
+  let path = parse(parent).root;
+  for (const part of relative(path, parent).split(sep).filter(Boolean)) {
+    path = join(path, part);
+    let info = lstatSync(path, { throwIfNoEntry: false });
+    if (!info) {
+      mkdirSync(path, { mode: 0o700 });
+      info = lstatSync(path);
+    }
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new Error('Restore destination ancestry must contain only real directories');
+    }
+  }
+}
+
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 function verifyDatabase(path) {
   const db = new DatabaseSync(path, { readOnly: true });
@@ -21,7 +43,7 @@ export function restoreSnapshot({ source, destination } = {}) {
   if (!source || !destination) throw new Error('Both source and destination are required');
   const sourcePath = resolve(source), dest = resolve(destination);
   if (!regular(sourcePath)) throw new Error('Source snapshot must be a regular file');
-  if (existsSync(dest)) throw new Error('Destination must be a new, nonexistent directory');
+  if (lstatSync(dest, { throwIfNoEntry: false })) throw new Error('Destination must be a new, nonexistent directory');
   if (dest === sourcePath || dest.startsWith(sourcePath + '/')) throw new Error('Invalid destination');
   if (existsSync(sourcePath + '-wal') && lstatSync(sourcePath + '-wal').size > 0)
     throw new Error('Source has uncheckpointed SQLite WAL content; restore an offline snapshot');
@@ -38,7 +60,7 @@ export function restoreSnapshot({ source, destination } = {}) {
     if (bytes.length !== file.size || digest(bytes) !== file.sha256)
       throw new Error('Attachment integrity check failed: ' + file.id);
   }
-  mkdirSync(dirname(dest), { recursive: true, mode: 0o700 });
+  prepareSafeDestinationParent(dest);
   mkdirSync(dest, { mode: 0o700 }); // Exclusive destination; existing data is never overwritten.
   try {
     const restoredDb = join(dest, 'workspace.sqlite');
