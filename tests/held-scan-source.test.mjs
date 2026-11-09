@@ -193,3 +193,58 @@ test('unlatched legacy instance cannot issue pending scan leases', async t => {
   assert.equal(db.prepare('SELECT scan_state FROM files').get().scan_state, 'legacy_unreviewed');
   db.close();
 });
+
+
+test('untrusted metadata object shape never runs accessors or consumes a pending lease', async t => {
+  const f = await fixture(t);
+  const worker = f.store();
+  t.after(() => worker.close());
+  const issued = worker.issueLease({ fileId: f.file.id, ownerProof: OWNER_PROOF });
+  const original = issued.request;
+  let getterCalls = 0;
+  const accessor = Object.defineProperty({ ...original }, 'sha256', {
+    enumerable: true,
+    get() { getterCalls += 1; throw new Error('Never read a metadata accessor'); }
+  });
+  const hidden = Object.defineProperty({ ...original }, 'internal_path', {
+    enumerable: false,
+    value: '/tmp/private-untrusted-path'
+  });
+  const fields = [
+    accessor,
+    hidden,
+    { ...original, unexpected: 'client-provided-privilege' },
+    Object.assign(Object.create({ inherited: true }), original),
+    Object.defineProperty({ ...original }, Symbol('private'), { value: 'secret' }),
+    { ...original, request_id: { toString() { getterCalls += 1; return original.request_id; } } },
+    { ...original, size_bytes: String(original.size_bytes) },
+    Object.keys(original).filter(key => key !== 'requested_at').reduce(
+      (result, key) => ({ ...result, [key]: original[key] }), {}),
+    new Proxy({ ...original }, { ownKeys() { throw new Error('Hostile proxy'); } })
+  ];
+  for (const request of fields) {
+    assert.throws(() => worker.claimHeld({ request, credential: CREDENTIAL }), /rejected/,
+      'Only the exact seven inert metadata fields can be processed');
+  }
+  assert.equal(getterCalls, 0, 'Metadata accessors and id coercion must not be invoked');
+  const taken = worker.claimHeld({ request: original, credential: CREDENTIAL });
+  assert.deepEqual(taken.content, CONTENT);
+  taken.content.fill(0);
+});
+
+test('object-coerced source and lease ids cannot bypass the canonical identifier boundary', async t => {
+  const f = await fixture(t);
+  const worker = f.store();
+  t.after(() => worker.close());
+  let conversions = 0;
+  const spoof = { toString() { conversions += 1; return f.file.id; } };
+  assert.throws(() => worker.issueLease({ fileId: spoof, ownerProof: OWNER_PROOF }), /rejected/);
+  const issued = worker.issueLease({ fileId: f.file.id, ownerProof: OWNER_PROOF });
+  assert.throws(() => worker.revokeLease({
+    leaseId: { toString() { conversions += 1; return issued.leaseId; } },
+    ownerProof: OWNER_PROOF
+  }), /rejected/);
+  assert.equal(conversions, 0);
+  assert.deepEqual(worker.revokeLease({ leaseId: issued.leaseId, ownerProof: OWNER_PROOF }),
+    { revoked: true });
+});
