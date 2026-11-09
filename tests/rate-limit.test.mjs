@@ -49,3 +49,23 @@ test('invalid configurations are rejected', () => {
   assert.throws(() => limit('x', 'login', 0, 1_000), /positive integers/);
   assert.throws(() => limit('x', 'login', 1, 0), /positive integers/);
 });
+
+test('colon-delimited client and action pairs never share a quota bucket', () => {
+  const limit = createRateLimiter({ maxKeys: 2, clock: () => 2_000 });
+  // These two pairs previously both produced the key "a:b:c".
+  assert.equal(limit('a:b', 'c', 1, 10_000), true);
+  assert.equal(limit('a', 'b:c', 1, 10_000), true);
+  assert.equal(limit('a:b', 'c', 1, 10_000), false);
+  assert.equal(limit('a', 'b:c', 1, 10_000), false);
+  // Distinct identities really occupy distinct capacity slots.
+  assert.equal(limit('other', 'action', 1, 10_000), false);
+});
+
+test('tuple encoding does not confuse JSON punctuation or unusual client strings', () => {
+  const limit = createRateLimiter({ maxKeys: 3, clock: () => 2_000 });
+  assert.equal(limit('x","y', 'z', 1, 10_000), true);
+  assert.equal(limit('x', 'y","z', 1, 10_000), true);
+  assert.equal(limit('["x","y"]', 'z', 1, 10_000), true);
+  assert.equal(limit('x","y', 'z', 1, 10_000), false);
+  assert.equal(limit('x', 'y","z', 1, 10_000), false);
+});
