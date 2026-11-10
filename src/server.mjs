@@ -70,8 +70,15 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
       if(size > 32_768) { const e = new Error('Request too large'); e.status=413; throw e; }
       chunks.push(chunk);
     }
-    try { const data=JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!data || Array.isArray(data) || typeof data !== 'object') throw new Error(); return data; }
-    catch { const e=new Error('Invalid JSON object'); e.status=400; throw e; }
+    // Buffer.toString('utf8') silently inserts replacement characters when
+    // bytes are malformed, potentially changing a stored display name, note,
+    // task or message without the owner's knowledge. Reject before JSON.parse.
+    try {
+      const text = new TextDecoder('utf-8', {fatal: true}).decode(Buffer.concat(chunks));
+      const data = JSON.parse(text);
+      if (!data || Array.isArray(data) || typeof data !== 'object') throw new Error();
+      return data;
+    } catch { const e=new Error('Invalid UTF-8 JSON object'); e.status=400; throw e; }
   }
   async function binaryBody(req, maxBytes=2*1024*1024) {
     if (Number(req.headers['content-length']) > maxBytes) { const e=new Error('File exceeds 2 MiB'); e.status=413; throw e; }
