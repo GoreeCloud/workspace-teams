@@ -5,6 +5,7 @@
 ## Implemented controls
 
 - Closed registration after atomic one-owner bootstrap; one-use, owner-revocable invitation registration with 24-hour expiry; invite listing reveals only token hashes (not reusable links), and revoked tokens cannot be redeemed.
+- JSON mutation bodies now require strictly valid UTF-8 bytes before parsing. Malformed sequences are refused with HTTP 400 rather than silently replacing characters in first-owner names, private notes, messages or tasks; raw-loopback tests confirm rejected bytes never create an owner or message, while valid Unicode remains intact. This is data-integrity hardening, not a replacement for protected first-owner activation or Identity authorization.
 - `scrypt` password hashing with independently generated 128-bit random salt; minimum password length 12.
 - 256-bit random session and invitation values; SHA-256 digests persisted instead of raw tokens.
 - `HttpOnly`, `SameSite=Strict`, scoped session cookies; `Secure` when `APP_ORIGIN` is HTTPS.
