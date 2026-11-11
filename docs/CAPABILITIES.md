@@ -23,7 +23,7 @@ This document organizes all **28 capability areas** from the founder's supplied 
 | 13 | Friends, contacts, social interaction | Planned | — |
 | 14 | Community onboarding and management | Partial | Private single-use invitations |
 | 15 | Moderation and trust controls | Partial | Owner-driven member removal, access checks; moderation suite pending |
-| 16 | File sharing and storage | Partial | Membership-scoped local file uploads, list/download/delete, 2 MiB per file and 32 MiB per space; no image preview, versioning, external storage or virus scanner |
+| 16 | File sharing and storage | Partial | Membership-scoped local uploads/list/download/delete, 2 MiB per file and 32 MiB per space; opt-in development-only pending hold gates downloads and exports, without an actual virus scanner, release authority, previews, versioning or external storage |
 | 17 | Collaborative documents, notes, knowledge bases | Partial | Shared plain-text notes only |
 | 18 | Tasks and project management | Partial | Shared checklist-style tasks only |
 | 19 | Search, navigation, discovery | Partial | Scoped substring search of accessible messages, notes, tasks; advanced search pending |

@@ -98,7 +98,7 @@ async function loadFiles(){
   const {files}=await api(`/spaces/${spaceId}/files`);
   if(state.space?.id!==spaceId)return;
   const list=$('#file-list');clear(list);
-  if(!files.length){list.append(el('p','muted','No files yet. Choose a small file to share with members of this space.'));return;}
+  if(!files.length){list.append(el('p','muted','No downloadable files. Uploads held for security review remain unavailable.'));return;}
   for(const file of files){
     const row=el('div','file-row');
     const meta=el('div','file-meta');meta.append(el('strong','',file.name),el('small','muted',`${(file.size/1024).toFixed(1)} KiB · ${new Date(file.uploadedAt).toLocaleDateString()}`));
@@ -121,7 +121,7 @@ $('#file-form').addEventListener('submit',async event=>{
   try{
     const response=await fetch(`/api/spaces/${spaceId}/files?name=${encodeURIComponent(file.name)}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file,credentials:'same-origin'});
     const result=await response.json();if(!response.ok)throw new Error(result.error||'Upload failed');
-    $('#file-input').value='';if(state.space?.id===spaceId)await loadFiles();showToast('File saved to this private space.');
+    $('#file-input').value='';if(state.space?.id===spaceId)await loadFiles();showToast(result.file?.scanState==='pending'?'File held for security review; download is not available.':'File saved to this private space.');
   }catch(error){showToast(error.message);}finally{button.disabled=false;}
 });
 async function loadTasks(){const {tasks}=await api(`/spaces/${state.space.id}/tasks`);const list=$('#task-list');clear(list);if(!tasks.length){list.append(el('p','muted','All clear. Add a task to get started.'));return;}tasks.forEach(task=>{const row=el('div','task-row'),check=el('input'),label=el('span',task.done?'completed':'',task.title),remove=el('button','quiet','Remove');check.type='checkbox';check.checked=!!task.done;check.setAttribute('aria-label','Complete '+task.title);check.addEventListener('change',async()=>{try{await api(`/tasks/${task.id}`,{method:'PATCH',data:{done:check.checked}});await loadTasks();}catch(e){showToast(e.message);await loadTasks();}});remove.type='button';remove.setAttribute('aria-label','Remove '+task.title);remove.addEventListener('click',async()=>{try{await api(`/tasks/${task.id}`,{method:'DELETE'});await loadTasks();}catch(e){showToast(e.message);}});row.append(check,label,remove);list.append(row);});}

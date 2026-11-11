@@ -30,9 +30,10 @@ function init(db) {
     CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id,created_at);
     CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, author_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, author_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, uploader_id TEXT NOT NULL REFERENCES users(id), filename TEXT NOT NULL, size INTEGER NOT NULL CHECK(size > 0 AND size <= 2097152), sha256 TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, uploader_id TEXT NOT NULL REFERENCES users(id), filename TEXT NOT NULL, size INTEGER NOT NULL CHECK(size > 0 AND size <= 2097152), sha256 TEXT NOT NULL, created_at TEXT NOT NULL, scan_state TEXT NOT NULL DEFAULT 'legacy_unreviewed' CHECK(scan_state IN ('legacy_unreviewed','pending','released','blocked')));
     CREATE INDEX IF NOT EXISTS idx_files_space ON files(space_id, created_at);
     CREATE TABLE IF NOT EXISTS invites (token_hash TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, created_by TEXT NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL, used_by TEXT REFERENCES users(id));
+    CREATE TABLE IF NOT EXISTS attachment_hold_policy (singleton INTEGER PRIMARY KEY CHECK(singleton=1), activated_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships(user_id, space_id);
     CREATE INDEX IF NOT EXISTS idx_notes_space ON notes(space_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_space ON tasks(space_id, created_at);`);
@@ -43,9 +44,16 @@ function init(db) {
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_id)');
   const inviteColumns = new Set(db.prepare('PRAGMA table_info(invites)').all().map(row => row.name));
   if (!inviteColumns.has('revoked_at')) db.exec('ALTER TABLE invites ADD COLUMN revoked_at INTEGER');
+  // Preserve old attachments as LEGACY/UNREVIEWED, never silently label them scanned.
+  const fileColumns = new Set(db.prepare('PRAGMA table_info(files)').all().map(row => row.name));
+  if (!fileColumns.has('scan_state')) db.exec("ALTER TABLE files ADD COLUMN scan_state TEXT NOT NULL DEFAULT 'legacy_unreviewed' CHECK(scan_state IN ('legacy_unreviewed','pending','released','blocked'))");
 }
 
-export function createApplication({dbPath = process.env.DATA_PATH || './data/workspace.sqlite', origin = process.env.APP_ORIGIN || 'http://localhost:3000', filesPath = process.env.FILES_PATH || null} = {}) {
+export function createApplication({dbPath = process.env.DATA_PATH || './data/workspace.sqlite', origin = process.env.APP_ORIGIN || 'http://localhost:3000', filesPath = process.env.FILES_PATH || null, attachmentHoldMode = 'legacy'} = {}) {
+  // No environment or request override is exposed. This is a development-only
+  // opt-in gate until a trusted owner-state/Identity integration is reviewed.
+  if (!['legacy','enforce'].includes(attachmentHoldMode)) throw new Error('Invalid attachment hold mode');
+  const enforceAttachmentHold = attachmentHoldMode === 'enforce';
   if (!/^https?:\/\//.test(origin)) throw new Error('APP_ORIGIN must be an HTTP(S) origin');
   const normalizedOrigin = new URL(origin).origin;
   mkdirSync(dirname(resolve(dbPath)), {recursive:true, mode:0o700});
@@ -53,6 +61,15 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
   mkdirSync(fileDirectory, {recursive:true, mode:0o700});
   const db = new DatabaseSync(dbPath);
   init(db);
+  // A sticky database latch prevents a later legacy-mode restart from
+  // exposing any unreviewed files once hold enforcement was enabled.
+  const previouslyHeld = db.prepare('SELECT activated_at FROM attachment_hold_policy WHERE singleton=1').get();
+  if (enforceAttachmentHold) {
+    db.prepare('INSERT OR IGNORE INTO attachment_hold_policy(singleton,activated_at) VALUES(1,?)').run(now());
+  } else if (previouslyHeld) {
+    db.close();
+    throw new Error('Attachment scan hold is latched for this database; legacy mode is denied');
+  }
   const streams = new Map();
   const limit = createRateLimiter();
   const get = (sql, ...args) => db.prepare(sql).get(...args);
@@ -96,10 +113,28 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
   }
   function storedFile(id) { return join(fileDirectory,id); }
   function fileById(id) {
-    return get('SELECT id,space_id AS spaceId,uploader_id AS uploaderId,filename,size,sha256,created_at AS createdAt FROM files WHERE id=?',id);
+    return get('SELECT id,space_id AS spaceId,uploader_id AS uploaderId,filename,size,sha256,created_at AS createdAt,scan_state AS scanState FROM files WHERE id=?',id);
   }
   function publicFile(file) {
-    return {id:file.id,name:file.filename,size:file.size,uploadedAt:file.createdAt,uploaderId:file.uploaderId};
+    return {id:file.id,name:file.filename,size:file.size,uploadedAt:file.createdAt,uploaderId:file.uploaderId,scanState:file.scanState};
+  }
+  // A separately running legacy-mode instance must also observe a hold that
+  // another process has latched since startup, not just its initial option.
+  function holdActive() {
+    return enforceAttachmentHold || !!get('SELECT activated_at FROM attachment_hold_policy WHERE singleton=1');
+  }
+  // Even the legacy mode never makes a previously held attachment public.
+  // Only an explicit trusted owner release may mark a scanned file 'released'.
+  // No release endpoint is implemented by this development-only increment.
+  function ordinaryFileAccess(file) {
+    return !!file && (file.scanState==='released' ||
+      (!holdActive() && file.scanState==='legacy_unreviewed'));
+  }
+  function spaceHasHeldFiles(spaceId) {
+    const permittedStates=holdActive()?['released']:['released','legacy_unreviewed'];
+    const row=get('SELECT scan_state AS state FROM files WHERE space_id=? AND scan_state NOT IN ('+
+      permittedStates.map(()=>'?').join(',')+') LIMIT 1',spaceId,...permittedStates);
+    return !!row;
   }
   function sessionHash(req) {
     const value = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith('gc_session='))?.slice(11);
@@ -300,6 +335,9 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         const includeFiles=searchParams.get('includeFiles');
         if(includeFiles!==null && includeFiles!=='0' && includeFiles!=='1')return error(res,400,'Invalid includeFiles option');
         const withFiles=includeFiles==='1';
+        // Never create a partial owner export that bypasses a held file,
+        // including metadata-only v1 and file-inclusive v2 exports.
+        if(spaceHasHeldFiles(spaceId))return error(res,423,'Space contains attachments held for scan review');
         if(!limit(ip+':'+user.id,withFiles?'space-export-files':'space-export',withFiles?3:6,60_000))return error(res,429,'Too many export requests');
         const count=get('SELECT COUNT(*) AS total FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.space_id=?',spaceId).total;
         if(count>10000)return error(res,413,'Space export exceeds message limit');
@@ -331,6 +369,7 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         const json=JSON.stringify(data), bytes=Buffer.byteLength(json);
         if(bytes>(withFiles?20:8)*1024*1024)return error(res,413,'Space JSON export exceeds size limit');
         if(membership(spaceId,user.id)!=='owner'||!get('SELECT token_hash FROM sessions WHERE token_hash=? AND expires_at>?',sessionHash(req),Date.now()))return error(res,403,'Export access revoked');
+        if(spaceHasHeldFiles(spaceId))return error(res,423,'Space contains attachments held for scan review');
         res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="workspace-space-'+spaceId+(withFiles?'-with-files':'')+'.json"','Content-Length':bytes,'Cache-Control':'no-store'});
         return res.end(json);
       }
@@ -338,7 +377,7 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
       if(filesRoute && ['GET','POST'].includes(method)) {
         const spaceId=filesRoute[1];
         if(!membership(spaceId,user.id))return error(res,404,'Space not found');
-        if(method==='GET')return send(res,200,{files:all(`SELECT id,filename AS name,size,created_at AS uploadedAt,uploader_id AS uploaderId FROM files WHERE space_id=? ORDER BY created_at DESC,id DESC LIMIT 500`,spaceId)});
+        if(method==='GET')return send(res,200,{files:all(`SELECT id,filename AS name,size,created_at AS uploadedAt,uploader_id AS uploaderId,scan_state AS scanState FROM files WHERE space_id=? AND (scan_state='released' OR (?=1 AND scan_state='legacy_unreviewed')) ORDER BY created_at DESC,id DESC LIMIT 500`,spaceId,holdActive()?0:1)});
         if(!limit(`${ip}:${user.id}`,'file-upload',20,60_000))return error(res,429,'Upload rate limit');
         if(req.headers['content-type']!=='application/octet-stream')return error(res,415,'Use application/octet-stream');
         const filename=searchParams.get('name');
@@ -349,9 +388,9 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         if(!data.length)return error(res,400,'Empty files are not supported');
         const used=get('SELECT COALESCE(SUM(size),0) AS bytes FROM files WHERE space_id=?',spaceId).bytes;
         if(used+data.length>32*1024*1024)return error(res,413,'Space file limit (32 MiB) exceeded');
-        const record={id:randomUUID(),spaceId,uploaderId:user.id,filename,size:data.length,sha256:digest(data),createdAt:now()};
+        const record={id:randomUUID(),spaceId,uploaderId:user.id,filename,size:data.length,sha256:digest(data),createdAt:now(),scanState:holdActive()?'pending':'legacy_unreviewed'};
         writeFileSync(storedFile(record.id),data,{flag:'wx',mode:0o600});
-        try {run('INSERT INTO files(id,space_id,uploader_id,filename,size,sha256,created_at) VALUES(?,?,?,?,?,?,?)',record.id,spaceId,user.id,filename,record.size,record.sha256,record.createdAt);}
+        try {run('INSERT INTO files(id,space_id,uploader_id,filename,size,sha256,created_at,scan_state) VALUES(?,?,?,?,?,?,?,?)',record.id,spaceId,user.id,filename,record.size,record.sha256,record.createdAt,record.scanState);}
         catch (e) {unlinkSync(storedFile(record.id));throw e;}
         return send(res,201,{file:publicFile(record)});
       }
@@ -360,9 +399,17 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
         const file=fileById(fileRoute[1]);
         if(!file||!membership(file.spaceId,user.id))return error(res,404,'File not found');
         if(method==='GET' && fileRoute[2]==='download') {
+          if(!ordinaryFileAccess(file))return error(res,423,'Attachment held for scan review');
           let data;
           try { data=readVerifiedAttachment(storedFile(file.id),file.size,file.sha256); }
           catch { return error(res,500,'Stored file integrity error'); }
+          // Recheck current owner-controlled state, membership, and session
+          // immediately before transmitting any attachment bytes.
+          const fresh=fileById(file.id);
+          if(!ordinaryFileAccess(fresh) || fresh.sha256!==file.sha256 || fresh.size!==file.size)
+            return error(res,423,'Attachment held for scan review');
+          if(!membership(file.spaceId,user.id)||!get('SELECT token_hash FROM sessions WHERE token_hash=? AND expires_at>?',sessionHash(req),Date.now()))
+            return error(res,403,'Attachment access revoked');
           res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':data.length,
             'Content-Disposition':`attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
             'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});

@@ -6,7 +6,7 @@ The versioned schema goreecloud.workspace-teams.space.v1 sets attachmentBytesInc
 
 Exports are unencrypted JSON. Handle them as confidential personal data: use trusted encrypted storage and remove unnecessary copies. Responses use attachment disposition and no-store cache headers. The alpha endpoint limits messages to 10000, JSON output to 8 MiB, and requests to 6 per user/IP per minute per process. It is not a public import API, comprehensive GDPR portability guarantee, or production-reviewed backup.
 
-Regression coverage: tests/export.test.mjs. Full real-browser acceptance is pending.
+Regression coverage: tests/export.test.mjs. In the **opt-in development-only scan-hold mode**, both v1 metadata-only and v2 file-inclusive exports return **423** while any attachment in that space is pending, blocked or legacy-unreviewed. Once enforcement is activated, its persistent database latch refuses legacy-mode restarts and existing legacy instances recheck the latch; there is no silent partial export or public release route. See [Scan hold staging](SCAN_HOLD_STAGING.md). Full real-browser acceptance is pending.
 
 ## Attachment-inclusive portable JSON export (alpha)
 
