@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Opt-in real-browser acceptance against a temporary, loopback-only Workspace Teams instance.
+ * Opt-in real-browser acceptance against a temporary, loopback-only GoreeCloud OpenRoom instance.
  * Requires a preinstalled, trusted Puppeteer module and Chromium. Never touches production data.
  */
 import assert from 'node:assert/strict';
@@ -58,7 +58,7 @@ try {
   const response = await page.goto(origin, { waitUntil: 'networkidle2', timeout: 25000 });
   assert.equal(response.status(), 200);
   await page.waitForSelector('#auth:not([hidden])', { timeout: 12000 });
-  assert.match(await page.title(), /GoreeCloud Workspace Teams/);
+  assert.equal(await page.title(), 'GoreeCloud OpenRoom');
   mark('live browser loaded first-run experience');
 
   await page.type('#username', credentials.username);
