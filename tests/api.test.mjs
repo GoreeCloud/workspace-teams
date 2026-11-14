@@ -188,6 +188,19 @@ test('private file upload, download and removal are authorized and integrity-pro
   assert.match(downloaded.headers.get('content-disposition'),/^attachment;/);
   assert.equal(await downloaded.text(),'abc');
   assert.equal((await upload(owner.cookie,'../escape',Buffer.from('x'))).status,400);
+  // Invisible direction controls can visually spoof a downloaded name or extension.
+  for (const deceptive of ['receipt\u202Efdp.exe', 'report\u2067abc\u2069.pdf', 'note\u0085.txt']) {
+    assert.equal((await upload(owner.cookie,deceptive,Buffer.from('x'))).status,400);
+  }
+  const filesAfterRejections=(await request(`/spaces/${space.id}/files`,{cookie:owner.cookie})).data.files;
+  assert.equal(filesAfterRejections.length,1,'rejected names must not create private-file records');
+  // Ordinary right-to-left letters remain usable; only invisible controls are denied.
+  const rtlUpload=await upload(owner.cookie,'تقرير-2026.txt',Buffer.from('rtl'));
+  assert.equal(rtlUpload.status,201);
+  const rtlFile=(await rtlUpload.json()).file;
+  const rtlDownload=await fetch(base+`/api/files/${rtlFile.id}/download`,{headers:{Cookie:owner.cookie}});
+  assert.equal(rtlDownload.status,200);
+  assert.equal(await rtlDownload.text(),'rtl');
   assert.equal((await upload(owner.cookie,'x',Buffer.alloc(2*1024*1024+1))).status,413);
   assert.equal((await upload(owner.cookie,'x',Buffer.from('x'),'https://cross-origin.invalid')).status,403);
   const outsider=(await request(`/spaces/${outsiderSpace.id}/files`,{cookie:owner.cookie}));assert.equal(outsider.status,404);

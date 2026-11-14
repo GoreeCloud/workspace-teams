@@ -92,7 +92,7 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
   }
   function safeFilename(value) {
     return typeof value==='string' && value.length>=1 && value.length<=128 && value.trim()===value &&
-      value!=='.' && value!=='..' && !/[\\/\x00-\x1f\x7f]/.test(value);
+      value!=='.' && value!=='..' && !/[\\/\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u.test(value);
   }
   function storedFile(id) { return join(fileDirectory,id); }
   function fileById(id) {
