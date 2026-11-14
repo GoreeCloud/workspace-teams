@@ -1,6 +1,6 @@
 # Example only. This timer is not enabled or installed automatically.
 [Unit]
-Description=Daily GoreeCloud Workspace Teams encrypted backup
+Description=Daily GoreeCloud OpenRoom encrypted backup
 
 [Timer]
 OnCalendar=*-*-* 03:30:00

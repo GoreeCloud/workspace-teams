@@ -1,5 +1,5 @@
 services:
-  workspace-teams:
+  openroom:
     build: .
     restart: unless-stopped
     environment:

@@ -1,4 +1,4 @@
-# GoreeCloud Workspace Teams — Capability Specification and Delivery Ledger
+# GoreeCloud OpenRoom — Capability Specification and Delivery Ledger
 
 **Document owner:** GoreeCloud. **Product intent:** self-hosted personal-first communication and collaboration for individuals, families, friends, communities, teams, and organizations. **Design authority:** GoreeCloud UI. **Status:** proposed product specification with a limited working alpha, November 2026.
 

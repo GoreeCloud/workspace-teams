@@ -1,6 +1,6 @@
 # Example only. Review paths, system account and permissions before installing.
 [Unit]
-Description=GoreeCloud Workspace Teams verified encrypted backup
+Description=GoreeCloud OpenRoom verified encrypted backup
 After=local-fs.target
 
 [Service]

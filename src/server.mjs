@@ -515,6 +515,6 @@ export function createApplication({dbPath = process.env.DATA_PATH || './data/wor
 if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   const port=Number(process.env.PORT || 3000), host=process.env.HOST || '127.0.0.1';
   const app=createApplication();
-  app.server.listen(port,host,()=>console.log(`GoreeCloud Workspace Teams listening on ${host}:${port}`));
+  app.server.listen(port,host,()=>console.log(`GoreeCloud OpenRoom listening on ${host}:${port}`));
   for(const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>app.server.close(()=>{app.close();process.exit(0);}));
 }
