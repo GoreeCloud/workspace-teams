@@ -1,5 +1,7 @@
 # Encrypted backup scheduling — self-hosted alpha
 
+**GoreeCloud OpenRoom compatibility note:** The existing `workspace-teams-*` archive prefix, `.workspace-teams-backup.lock` sentinel, example systemd filenames and historical paths are deliberately unchanged; they do not indicate that the product still uses its former name. Do not rename live archives, lock files, service identities or secrets during a cosmetic upgrade.
+
 **State:** A one-shot encrypted backup command and an *uninstalled* systemd timer/service example are included in the repository. No scheduler, backup destination, retention policy or offsite copy has been activated on a GoreeCloud host. This is not production recovery acceptance.
 
 ## Design and safeguards

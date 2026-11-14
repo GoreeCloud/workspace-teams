@@ -2,7 +2,9 @@
 
 **Status: read-only metadata audit; NOT a recovery, migration, or production release approval.**
 
-The current native GoreeCloud Workspace Teams alpha uses Node.js/SQLite and declares a separate workspace-data volume in compose.yaml. A prior, distinct Docker Compose project named goreecloud-workspace-teams left historical volumes on the authorized goreecloud-vps-01 host. Names suggest Mattermost and PostgreSQL origins, but Docker labels alone do **not** verify exact application versions, contents, ownership history, data value, or backup integrity.
+**Name transition (November 14, 2026):** The active product is now **GoreeCloud OpenRoom**. The legacy Compose project, volume names, filesystem paths and evidence below deliberately retain their original spelling; do not rename or delete historical volumes as part of product rebranding.
+
+The current native GoreeCloud OpenRoom alpha uses Node.js/SQLite and declares a separate workspace-data volume in compose.yaml. A prior, distinct Docker Compose project named goreecloud-workspace-teams left historical volumes on the authorized goreecloud-vps-01 host. Names suggest Mattermost and PostgreSQL origins, but Docker labels alone do **not** verify exact application versions, contents, ownership history, data value, or backup integrity.
 
 On November 5, 2026, a metadata-only check verified these six Compose-labeled volumes:
 
@@ -34,7 +36,7 @@ Exit status 0 means only that the six-volume metadata baseline matches and there
 1. Preserve the located historical Compose definition and establish the original operators, asset ownership and deployment history through authorized records. Identify service dependencies without changing running systems.
 2. Confirm whether historical application and PostgreSQL data are valuable. Preserve permissions, identities, and retention obligations; do not interpret names as proof of contents.
 3. Inventory independently protected backups and access to recovery credentials, then prove restoration in a separately authorized isolated environment. An archive name or successful backup command is not evidence of a usable restore.
-4. Verify the native Workspace Teams release's still-open first-owner setup, backup destination, access control, UI, and host-specific recovery gates before introducing it onto this VPS.
+4. Verify the native OpenRoom release's still-open first-owner setup, backup destination, access control, UI, and host-specific recovery gates before introducing it onto this VPS.
 5. Obtain explicit approval before production deployment, migration, volume mount, permissions changes, retention actions, deletion, or cleanup. Preserve recoverability and prepare rollback steps.
 
 For native encrypted archives, see [backup scheduling](BACKUP_SCHEDULING.md) and [deployment/recovery guidance](DEPLOYMENT.md). This legacy audit is **not** a substitute for those workflows.

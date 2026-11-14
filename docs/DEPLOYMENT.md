@@ -14,6 +14,8 @@ Default listener: `127.0.0.1:3000`; database: `./data/workspace.sqlite`; public 
 
 ## Container preview
 
+The example Compose application service is now named `openroom`, while the persistent named volume key remains `workspace-data` for compatibility. Before applying this example to an existing installation, inspect the existing Compose project name, services, volumes and backup/restore readiness. Do not assume a rename will automatically adopt every old project volume; do not remove old containers or volumes until verified.
+
 ```sh
 APP_ORIGIN=http://localhost:3000 docker compose up --build -d
 docker compose ps

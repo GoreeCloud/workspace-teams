@@ -1,8 +1,8 @@
-# GoreeCloud Workspace Teams
+# GoreeCloud OpenRoom
 
 **A self-hosted home for conversations, ideas, people, and the things you make together.**
 
-GoreeCloud Workspace Teams is a personal-first collaboration platform designed for an individual, family, friends, community, or organization. The target platform includes messaging, voice/video, forums, files, documents, tasks, calendars and owner-controlled extensibility. The current implementation is a **limited web/API alpha**, not the completed platform or a production release.
+GoreeCloud OpenRoom (formerly **GoreeCloud Workspace Teams**) is a personal-first collaboration platform designed for an individual, family, friends, community, or organization. The target platform includes messaging, voice/video, forums, files, documents, tasks, calendars and owner-controlled extensibility. The current implementation is a **limited web/API alpha**, not the completed platform or a production release.
 
 ## Implemented in this alpha
 
@@ -19,6 +19,12 @@ GoreeCloud Workspace Teams is a personal-first collaboration platform designed f
 
 Not implemented: voice/video/screen sharing, direct-message UI, large files and previews, rich editor, full forum/thread system, reactions, E2EE, enterprise identity, calendar, notification service, federated indexed search, automatically enabled/offsite encrypted backups, PostgreSQL, production security certification, native apps and offline sync. See the [28-area capability ledger](docs/CAPABILITIES.md) for precise target-vs-delivered distinctions.
 
+
+## Rename and compatibility (November 14, 2026)
+
+**Canonical product:** GoreeCloud OpenRoom · **repository:** [GoreeCloud/openroom](https://github.com/GoreeCloud/openroom) · **former name:** GoreeCloud Workspace Teams.
+
+This is a branding and source-identity change, **not a data migration or production deployment**. Existing SQLite filenames, internal export schema identifiers, encrypted archive format, Docker volume identifiers and historical systemd backup filenames remain unchanged intentionally. The Compose example now names its application service `openroom` but retains the `workspace-data` volume key. On a host with a prior Compose installation, audit the project name, volume mapping and old container before changing the running service; do not use `down -v` or `--remove-orphans` without an independently verified retention and rollback plan. See [rename compatibility guide](docs/REBRAND.md).
 
 ## Historical Docker volume preservation
 

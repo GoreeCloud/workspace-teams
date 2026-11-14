@@ -1,5 +1,13 @@
 # Development History
 
+## November 14, 2026 — GoreeCloud OpenRoom product identity
+
+- Canonical product name changed from **GoreeCloud Workspace Teams** to **GoreeCloud OpenRoom** in application-visible labels, server log, package metadata, and repository documentation.
+- The example Compose service key is now `openroom`. Persistent `workspace-data` volume key, SQLite storage, existing export schema IDs and GCWSENC1 encrypted backups were **not** migrated or renamed.
+- Existing historical Mattermost/PostgreSQL Docker volumes, sample backup service filenames and legacy archive identifiers are preserved. This change does not deploy a service, modify a host, approve data migration or assert production release readiness.
+- Added an identity regression test and [rename compatibility guide](REBRAND.md).
+
+
 ## 2026-11-03 — Authenticated encrypted backup and isolated restoration
 
 - Added optional `GCWSENC1` AES-256-GCM/scrypt single-file SQLite-plus-attachments archives, authenticated manifest and integrity checks, and fail-closed key/tamper validation.
