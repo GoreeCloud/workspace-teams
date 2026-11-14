@@ -31,6 +31,7 @@
 - **Invite link is a bearer secret.** Share privately. Avoid public URLs, logs and link preview crawlers. Invitation registration removes the query from browser history after successful submission, but previously emitted URLs may remain in intermediaries.
 - **HTTP must remain localhost-only.** Use HTTPS for remote connections, with trusted reverse-proxy configuration and exact `APP_ORIGIN`.
 - **Uploaded files are untrusted.** No malware scanner, content-type verification, content disarm, image previews or enterprise retention policies exist; browser downloads are forced as attachments (`application/octet-stream`).
+- **Filename spoofing mitigation (source-level, not malware scanning):** new uploads reject Unicode bidirectional formatting controls and C1 control characters, limiting misleading display order and extensions. Ordinary RTL-script filenames remain supported. Existing stored filenames, portable archives and historical exports are not renamed or rewritten; independent archive/import policies and Wardveil scanning remain open.
 - **Static file serving uses an explicit allowlist**, but administrative filesystem protections, container isolation and reverse proxy settings still require testing.
 
 ## Reporting
