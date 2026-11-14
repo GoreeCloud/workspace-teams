@@ -17,6 +17,9 @@ test('OpenRoom has consistent public-facing product identity', async () => {
   assert.equal(JSON.parse(pkg).name, '@goreecloud/openroom');
   assert.match(server, /GoreeCloud OpenRoom listening/);
   assert.match(compose, /^  openroom:$/m);
+  const browserAcceptance = await read('scripts/browser-acceptance.mjs');
+  assert.match(browserAcceptance, /page\.title\(\), 'GoreeCloud OpenRoom'/);
+  assert.doesNotMatch(browserAcceptance, /GoreeCloud Workspace Teams/);
 });
 
 test('rename retains versioned exports, encrypted backup and volume compatibility', async () => {
